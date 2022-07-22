@@ -31807,6 +31807,137 @@ Ops.Html.QuerySelector_v2.prototype = new CABLES.Op();
 CABLES.OPS["a1a2189b-564c-4dd7-b3d9-a6cebc0cd94e"]={f:Ops.Html.QuerySelector_v2,objName:"Ops.Html.QuerySelector_v2"};
 
 
+
+
+// **************************************************************
+// 
+// Ops.Array.ArrayIteratorStrings
+// 
+// **************************************************************
+
+Ops.Array.ArrayIteratorStrings = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    exe = op.inTrigger("Exe"),
+    arr = op.inArray("Array"),
+    trigger = op.outTrigger("Trigger"),
+    idx = op.outNumber("Index"),
+    val = op.outString("Value");
+
+exe.onTriggered = function ()
+{
+    if (!arr.get()) return;
+
+    for (let i = 0; i < arr.get().length; i++)
+    {
+        idx.set(i);
+        let value = null;
+        if (arr.get()[i])
+        {
+            value = String(arr.get()[i]);
+        }
+        val.set(value);
+        trigger.trigger();
+        op.patch.instancing.increment();
+    }
+};
+
+
+};
+
+Ops.Array.ArrayIteratorStrings.prototype = new CABLES.Op();
+CABLES.OPS["0f8ee026-e094-484d-8403-547c92293be9"]={f:Ops.Array.ArrayIteratorStrings,objName:"Ops.Array.ArrayIteratorStrings"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Array.ArraySetString
+// 
+// **************************************************************
+
+Ops.Array.ArraySetString = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    exe = op.inTriggerButton("Execute"),
+    array = op.inArray("Array"),
+    index = op.inValueInt("Index"),
+    value = op.inString("String"),
+    values = op.outArray("Result");
+
+values.ignoreValueSerialize = true;
+exe.onTriggered = update;
+
+function updateIndex()
+{
+    if (exe.isLinked()) return;
+    update();
+}
+
+function update()
+{
+    const arr = array.get();
+    if (!arr) return;
+    arr[index.get()] = value.get();
+
+    values.set("");
+    values.set(arr);
+}
+
+
+};
+
+Ops.Array.ArraySetString.prototype = new CABLES.Op();
+CABLES.OPS["2752b35e-592d-41db-b8dd-cdc43a7ccbe2"]={f:Ops.Array.ArraySetString,objName:"Ops.Array.ArraySetString"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Array.SwitchArray
+// 
+// **************************************************************
+
+Ops.Array.SwitchArray = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+var idx=op.inValueInt("Index");
+var valuePorts=[];
+var result=op.outArray("Result");
+
+idx.onChange=update;
+
+for(var i=0;i<10;i++)
+{
+    var p=op.inArray("Array "+i);
+    valuePorts.push( p );
+    p.onChange=update;
+}
+
+function update()
+{
+    if(idx.get()>=0 && valuePorts[idx.get()])
+    {
+        result.set( valuePorts[idx.get()].get() );
+    }
+}
+
+};
+
+Ops.Array.SwitchArray.prototype = new CABLES.Op();
+CABLES.OPS["3fab881c-c2cf-42a0-9c42-2d8edfd93f57"]={f:Ops.Array.SwitchArray,objName:"Ops.Array.SwitchArray"};
+
+
 window.addEventListener('load', function(event) {
 CABLES.jsLoaded=new Event('CABLES.jsLoaded');
 document.dispatchEvent(CABLES.jsLoaded);
