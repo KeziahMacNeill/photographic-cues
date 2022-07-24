@@ -1,6 +1,7 @@
 ## Patch Variables:
 
 * __about_button_hover__ ```Number```
+* __about_button_hover__ ```Number```
 * __angle_between_camera_and_hit__ ```Number```
 * __audio_button_hover__ ```Number```
 * __audio_output_gain__ ```Number```
@@ -46,6 +47,7 @@
 * __hit_y__ ```Number```
 * __hit_z__ ```Number```
 * __is_hit_body_string_valid__ ```Number```
+* __is_mobile__ ```Number```
 * __lake_displacement_amount__ ```Number```
 * __lake_displacement_noise_texture_scale__ ```Number```
 * __lake_geometry_bounding_maxX__ ```Number```
@@ -87,6 +89,7 @@
 * __text_intro__ ```String```
 * __text_texture__ ```Texture```
 * __texture_3Dmouse_lake__ ```Texture```
+* __texture_lake_boundary__ ```Texture```
 * __timeline_offset__ ```Number```
 * __Transition Duration Overview > Detail View__ ```Number```
 * __Transition Duration Title > Tutorial__ ```Number```
@@ -95,4 +98,5 @@
 * __tutorial_colorarea_position_z__ ```Number```
 * __tutorial_colorarea_size__ ```Number```
 * __tutorial_transition__ ```Number```
+* __water_level__ ```Number```
 

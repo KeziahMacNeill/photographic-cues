@@ -23,6 +23,7 @@ Ops.Points=Ops.Points || {};
 Ops.String=Ops.String || {};
 Ops.Values=Ops.Values || {};
 Ops.Boolean=Ops.Boolean || {};
+Ops.Browser=Ops.Browser || {};
 Ops.Devices=Ops.Devices || {};
 Ops.Gl.GLTF=Ops.Gl.GLTF || {};
 Ops.Physics=Ops.Physics || {};
@@ -1549,115 +1550,6 @@ render.onTriggered = function ()
 
 Ops.Gl.TextureEffects.Levels.prototype = new CABLES.Op();
 CABLES.OPS["42ad6bbe-df17-48c7-89dd-bd7022113897"]={f:Ops.Gl.TextureEffects.Levels,objName:"Ops.Gl.TextureEffects.Levels"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.FastBlur
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.FastBlur = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"blur_frag":"\nUNI sampler2D tex;\n#ifdef USE_MASK\n    UNI sampler2D texMask;\n#endif\nUNI float amount;\nUNI float pass;\n\nIN vec2 texCoord;\n\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nIN vec2 coord0;\nIN vec2 coord1;\nIN vec2 coord2;\nIN vec2 coord3;\nIN vec2 coord4;\nIN vec2 coord5;\nIN vec2 coord6;\n\n#ifdef HAS_MASK\n    UNI sampler2D imageMask;\n#endif\n\nvoid main()\n{\n    vec4 color = vec4(0.0);\n\n    #ifdef USE_MASK\n        #ifdef MASK_INVERT\n            if(texture(texMask,texCoord).r<0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n\n        #ifndef MASK_INVERT\n            if(texture(texMask,texCoord).r>0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n    #endif\n\n    color += texture(tex, coord0) * 0.06927096443792478;\n    color += texture(tex, coord1) * 0.1383328848652136;\n    color += texture(tex, coord2) * 0.21920904690397863;\n    color += texture(tex, coord3) * 0.14637421;\n    color += texture(tex, coord4) * 0.21920904690397863;\n    color += texture(tex, coord5) * 0.1383328848652136;\n    color += texture(tex, coord6) * 0.06927096443795711;\n\n    color.a=1.0;\n    outColor= color;\n}","blur_vert":"\nIN vec3 vPosition;\nIN vec2 attrTexCoord;\nIN vec3 attrVertNormal;\nOUT vec2 texCoord;\nOUT vec3 norm;\nUNI mat4 projMatrix;\nUNI mat4 mvMatrix;\nUNI mat4 modelMatrix;\n\nUNI float pass;\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nOUT vec2 coord0;\nOUT vec2 coord1;\nOUT vec2 coord2;\nOUT vec2 coord3;\nOUT vec2 coord4;\nOUT vec2 coord5;\nOUT vec2 coord6;\n\n// http://dev.theomader.com/gaussian-kernel-calculator/\n// http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/\n\n\nvoid main()\n{\n    texCoord=attrTexCoord;\n    norm=attrVertNormal;\n    vec4 pos=vec4(vPosition,  1.0);\n    {{MODULE_VERTEX_POSITION}}\n\n    vec2 dir=vec2(dirX,dirY);\n    vec2 res=vec2( (1.) / width , (1.) / height )*dir;\n\n    coord3= attrTexCoord;\n\n    coord0= attrTexCoord + (-3.0368997744118595 * res);\n    coord1= attrTexCoord + (-2.089778445362373 * res);\n    coord2= attrTexCoord + (-1.2004366090034069 * res);\n    coord4= attrTexCoord + (1.2004366090034069 * res);\n    coord5= attrTexCoord + (2.089778445362373* res);\n    coord6= attrTexCoord + (3.0368997744118595 * res);\n\n    #ifdef CLAMP\n        coord0=clamp(coord0,0.0,1.0);\n        coord1=clamp(coord1,0.0,1.0);\n        coord2=clamp(coord2,0.0,1.0);\n        coord3=clamp(coord3,0.0,1.0);\n        coord4=clamp(coord4,0.0,1.0);\n        coord5=clamp(coord5,0.0,1.0);\n        coord6=clamp(coord6,0.0,1.0);\n    #endif\n\n    gl_Position = projMatrix * mvMatrix * pos;\n}\n",};
-const
-    render = op.inTrigger("render"),
-    trigger = op.outTrigger("trigger"),
-    amount = op.inFloat("amount", 3),
-    clamp = op.inBool("Clamp", false),
-    maskInvert = op.inBool("Mask Invert", false),
-    mask = op.inTexture("Mask");
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, "fastblur");
-
-shader.setSource(attachments.blur_vert, attachments.blur_frag);
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    uniDirX = new CGL.Uniform(shader, "f", "dirX", 0),
-    uniDirY = new CGL.Uniform(shader, "f", "dirY", 0),
-    uniWidth = new CGL.Uniform(shader, "f", "width", 0),
-    uniHeight = new CGL.Uniform(shader, "f", "height", 0),
-    uniPass = new CGL.Uniform(shader, "f", "pass", 0),
-    uniAmount = new CGL.Uniform(shader, "f", "amount", amount.get()),
-    textureAlpha = new CGL.Uniform(shader, "t", "texMask", 1);
-
-amount.onChange = () => { uniAmount.setValue(amount.get()); };
-
-const direction = op.inDropDown("direction", ["both", "vertical", "horizontal"]);
-let dir = 0;
-direction.set("both");
-direction.onChange = () =>
-{
-    if (direction.get() == "both")dir = 0;
-    if (direction.get() == "horizontal")dir = 1;
-    if (direction.get() == "vertical")dir = 2;
-};
-
-clamp.onChange = () => { shader.toggleDefine("CLAMP", clamp.get()); };
-
-maskInvert.onChange =
-mask.onChange = () =>
-{
-    shader.toggleDefine("USE_MASK", mask.isLinked());
-    shader.toggleDefine("MASK_INVERT", maskInvert.get());
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    uniWidth.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().width);
-    uniHeight.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().height);
-    const numPasses = amount.get();
-
-    if (mask.get())cgl.setTexture(1, mask.get().tex);
-
-    for (let i = 0; i < numPasses; i++)
-    {
-        cgl.pushShader(shader);
-
-        uniPass.setValue(i / numPasses);
-
-        // first pass
-        if (dir === 0 || dir == 2)
-        {
-            cgl.currentTextureEffect.bind();
-            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-            uniDirX.setValue(0.0);
-            uniDirY.setValue(1.0 + (i * i));
-
-            cgl.currentTextureEffect.finish();
-        }
-
-        // second pass
-        if (dir === 0 || dir == 1)
-        {
-            cgl.currentTextureEffect.bind();
-            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-            uniDirX.setValue(1.0 + (i * i));
-            uniDirY.setValue(0.0);
-
-            cgl.currentTextureEffect.finish();
-        }
-
-        cgl.popShader();
-    }
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.FastBlur.prototype = new CABLES.Op();
-CABLES.OPS["720ca148-dcf7-433b-bb1f-edbfb7433c6c"]={f:Ops.Gl.TextureEffects.FastBlur,objName:"Ops.Gl.TextureEffects.FastBlur"};
 
 
 
@@ -5477,6 +5369,115 @@ render.onTriggered = function ()
 
 Ops.Gl.TextureEffects.ScaleTexture.prototype = new CABLES.Op();
 CABLES.OPS["12cfa989-d575-4ee2-9deb-5392097c5a27"]={f:Ops.Gl.TextureEffects.ScaleTexture,objName:"Ops.Gl.TextureEffects.ScaleTexture"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.FastBlur
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.FastBlur = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"blur_frag":"\nUNI sampler2D tex;\n#ifdef USE_MASK\n    UNI sampler2D texMask;\n#endif\nUNI float amount;\nUNI float pass;\n\nIN vec2 texCoord;\n\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nIN vec2 coord0;\nIN vec2 coord1;\nIN vec2 coord2;\nIN vec2 coord3;\nIN vec2 coord4;\nIN vec2 coord5;\nIN vec2 coord6;\n\n#ifdef HAS_MASK\n    UNI sampler2D imageMask;\n#endif\n\nvoid main()\n{\n    vec4 color = vec4(0.0);\n\n    #ifdef USE_MASK\n        #ifdef MASK_INVERT\n            if(texture(texMask,texCoord).r<0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n\n        #ifndef MASK_INVERT\n            if(texture(texMask,texCoord).r>0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n    #endif\n\n    color += texture(tex, coord0) * 0.06927096443792478;\n    color += texture(tex, coord1) * 0.1383328848652136;\n    color += texture(tex, coord2) * 0.21920904690397863;\n    color += texture(tex, coord3) * 0.14637421;\n    color += texture(tex, coord4) * 0.21920904690397863;\n    color += texture(tex, coord5) * 0.1383328848652136;\n    color += texture(tex, coord6) * 0.06927096443795711;\n\n    color.a=1.0;\n    outColor= color;\n}","blur_vert":"\nIN vec3 vPosition;\nIN vec2 attrTexCoord;\nIN vec3 attrVertNormal;\nOUT vec2 texCoord;\nOUT vec3 norm;\nUNI mat4 projMatrix;\nUNI mat4 mvMatrix;\nUNI mat4 modelMatrix;\n\nUNI float pass;\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nOUT vec2 coord0;\nOUT vec2 coord1;\nOUT vec2 coord2;\nOUT vec2 coord3;\nOUT vec2 coord4;\nOUT vec2 coord5;\nOUT vec2 coord6;\n\n// http://dev.theomader.com/gaussian-kernel-calculator/\n// http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/\n\n\nvoid main()\n{\n    texCoord=attrTexCoord;\n    norm=attrVertNormal;\n    vec4 pos=vec4(vPosition,  1.0);\n    {{MODULE_VERTEX_POSITION}}\n\n    vec2 dir=vec2(dirX,dirY);\n    vec2 res=vec2( (1.) / width , (1.) / height )*dir;\n\n    coord3= attrTexCoord;\n\n    coord0= attrTexCoord + (-3.0368997744118595 * res);\n    coord1= attrTexCoord + (-2.089778445362373 * res);\n    coord2= attrTexCoord + (-1.2004366090034069 * res);\n    coord4= attrTexCoord + (1.2004366090034069 * res);\n    coord5= attrTexCoord + (2.089778445362373* res);\n    coord6= attrTexCoord + (3.0368997744118595 * res);\n\n    #ifdef CLAMP\n        coord0=clamp(coord0,0.0,1.0);\n        coord1=clamp(coord1,0.0,1.0);\n        coord2=clamp(coord2,0.0,1.0);\n        coord3=clamp(coord3,0.0,1.0);\n        coord4=clamp(coord4,0.0,1.0);\n        coord5=clamp(coord5,0.0,1.0);\n        coord6=clamp(coord6,0.0,1.0);\n    #endif\n\n    gl_Position = projMatrix * mvMatrix * pos;\n}\n",};
+const
+    render = op.inTrigger("render"),
+    trigger = op.outTrigger("trigger"),
+    amount = op.inFloat("amount", 3),
+    clamp = op.inBool("Clamp", false),
+    maskInvert = op.inBool("Mask Invert", false),
+    mask = op.inTexture("Mask");
+
+const cgl = op.patch.cgl;
+const shader = new CGL.Shader(cgl, "fastblur");
+
+shader.setSource(attachments.blur_vert, attachments.blur_frag);
+const
+    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
+    uniDirX = new CGL.Uniform(shader, "f", "dirX", 0),
+    uniDirY = new CGL.Uniform(shader, "f", "dirY", 0),
+    uniWidth = new CGL.Uniform(shader, "f", "width", 0),
+    uniHeight = new CGL.Uniform(shader, "f", "height", 0),
+    uniPass = new CGL.Uniform(shader, "f", "pass", 0),
+    uniAmount = new CGL.Uniform(shader, "f", "amount", amount.get()),
+    textureAlpha = new CGL.Uniform(shader, "t", "texMask", 1);
+
+amount.onChange = () => { uniAmount.setValue(amount.get()); };
+
+const direction = op.inDropDown("direction", ["both", "vertical", "horizontal"]);
+let dir = 0;
+direction.set("both");
+direction.onChange = () =>
+{
+    if (direction.get() == "both")dir = 0;
+    if (direction.get() == "horizontal")dir = 1;
+    if (direction.get() == "vertical")dir = 2;
+};
+
+clamp.onChange = () => { shader.toggleDefine("CLAMP", clamp.get()); };
+
+maskInvert.onChange =
+mask.onChange = () =>
+{
+    shader.toggleDefine("USE_MASK", mask.isLinked());
+    shader.toggleDefine("MASK_INVERT", maskInvert.get());
+};
+
+render.onTriggered = function ()
+{
+    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
+
+    uniWidth.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().width);
+    uniHeight.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().height);
+    const numPasses = amount.get();
+
+    if (mask.get())cgl.setTexture(1, mask.get().tex);
+
+    for (let i = 0; i < numPasses; i++)
+    {
+        cgl.pushShader(shader);
+
+        uniPass.setValue(i / numPasses);
+
+        // first pass
+        if (dir === 0 || dir == 2)
+        {
+            cgl.currentTextureEffect.bind();
+            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
+
+            uniDirX.setValue(0.0);
+            uniDirY.setValue(1.0 + (i * i));
+
+            cgl.currentTextureEffect.finish();
+        }
+
+        // second pass
+        if (dir === 0 || dir == 1)
+        {
+            cgl.currentTextureEffect.bind();
+            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
+
+            uniDirX.setValue(1.0 + (i * i));
+            uniDirY.setValue(0.0);
+
+            cgl.currentTextureEffect.finish();
+        }
+
+        cgl.popShader();
+    }
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.FastBlur.prototype = new CABLES.Op();
+CABLES.OPS["720ca148-dcf7-433b-bb1f-edbfb7433c6c"]={f:Ops.Gl.TextureEffects.FastBlur,objName:"Ops.Gl.TextureEffects.FastBlur"};
 
 
 
@@ -11026,85 +11027,6 @@ CABLES.OPS["4fbfc71e-1429-439f-8591-ad35961252ed"]={f:Ops.Vars.VarSetTexture_v2,
 
 // **************************************************************
 // 
-// Ops.Vars.VarGetTexture_v2
-// 
-// **************************************************************
-
-Ops.Vars.VarGetTexture_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const val = op.outTexture("Value");
-op.varName = op.inValueSelect("Variable", [], "", true);
-
-new CABLES.VarGetOpWrapper(op, "object", op.varName, val);
-
-
-};
-
-Ops.Vars.VarGetTexture_v2.prototype = new CABLES.Op();
-CABLES.OPS["5f8ce5fc-9787-45c9-9a83-0eebd2c6de15"]={f:Ops.Vars.VarGetTexture_v2,objName:"Ops.Vars.VarGetTexture_v2"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.Textures.ColorTexture
-// 
-// **************************************************************
-
-Ops.Gl.Textures.ColorTexture = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    r = op.inValueSlider("r", Math.random()),
-    g = op.inValueSlider("g", Math.random()),
-    b = op.inValueSlider("b", Math.random()),
-    a = op.inValueSlider("a", 1.0),
-    texOut = op.outTexture("texture_out");
-
-r.setUiAttribs({ "colorPick": true });
-const cgl = op.patch.cgl;
-let fb = null;
-
-r.onChange =
-    g.onChange =
-    b.onChange =
-    a.onChange = () => { cgl.addNextFrameOnceCallback(render); };
-
-cgl.addNextFrameOnceCallback(render);
-
-function render()
-{
-    if (!fb)
-    {
-        if (cgl.glVersion == 1) fb = new CGL.Framebuffer(cgl, 8, 8, { "name": "colorTexture" });
-        else fb = new CGL.Framebuffer2(cgl, 8, 8, { "name": "colorTexture", "depth": false });
-        fb.setFilter(CGL.Texture.FILTER_MIPMAP);
-    }
-
-    fb.renderStart();
-    cgl.gl.clearColor(r.get(), g.get(), b.get(), a.get());
-    cgl.gl.clear(cgl.gl.COLOR_BUFFER_BIT);
-    fb.renderEnd();
-    texOut.set(fb.getTextureColor());
-}
-
-
-};
-
-Ops.Gl.Textures.ColorTexture.prototype = new CABLES.Op();
-CABLES.OPS["59b94270-0364-4c0f-a9fc-ba2561696a23"]={f:Ops.Gl.Textures.ColorTexture,objName:"Ops.Gl.Textures.ColorTexture"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.TextureEffects.DepthTextureFocus_v2
 // 
 // **************************************************************
@@ -16022,6 +15944,31 @@ CABLES.OPS["909ee871-b0f3-477f-bee2-d0ab40bb5804"]={f:Ops.Color.HSBtoRGB,objName
 
 // **************************************************************
 // 
+// Ops.Vars.VarGetTexture_v2
+// 
+// **************************************************************
+
+Ops.Vars.VarGetTexture_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const val = op.outTexture("Value");
+op.varName = op.inValueSelect("Variable", [], "", true);
+
+new CABLES.VarGetOpWrapper(op, "object", op.varName, val);
+
+
+};
+
+Ops.Vars.VarGetTexture_v2.prototype = new CABLES.Op();
+CABLES.OPS["5f8ce5fc-9787-45c9-9a83-0eebd2c6de15"]={f:Ops.Vars.VarGetTexture_v2,objName:"Ops.Vars.VarGetTexture_v2"};
+
+
+
+
+// **************************************************************
+// 
 // Ops.Math.Compare.LessThan
 // 
 // **************************************************************
@@ -20661,6 +20608,60 @@ render.onTriggered = function ()
 
 Ops.Gl.TextureEffects.PixelDisplacement_v4.prototype = new CABLES.Op();
 CABLES.OPS["c00f79f2-0505-4b4f-b0bf-10ef7875dd87"]={f:Ops.Gl.TextureEffects.PixelDisplacement_v4,objName:"Ops.Gl.TextureEffects.PixelDisplacement_v4"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.Textures.ColorTexture
+// 
+// **************************************************************
+
+Ops.Gl.Textures.ColorTexture = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    r = op.inValueSlider("r", Math.random()),
+    g = op.inValueSlider("g", Math.random()),
+    b = op.inValueSlider("b", Math.random()),
+    a = op.inValueSlider("a", 1.0),
+    texOut = op.outTexture("texture_out");
+
+r.setUiAttribs({ "colorPick": true });
+const cgl = op.patch.cgl;
+let fb = null;
+
+r.onChange =
+    g.onChange =
+    b.onChange =
+    a.onChange = () => { cgl.addNextFrameOnceCallback(render); };
+
+cgl.addNextFrameOnceCallback(render);
+
+function render()
+{
+    if (!fb)
+    {
+        if (cgl.glVersion == 1) fb = new CGL.Framebuffer(cgl, 8, 8, { "name": "colorTexture" });
+        else fb = new CGL.Framebuffer2(cgl, 8, 8, { "name": "colorTexture", "depth": false });
+        fb.setFilter(CGL.Texture.FILTER_MIPMAP);
+    }
+
+    fb.renderStart();
+    cgl.gl.clearColor(r.get(), g.get(), b.get(), a.get());
+    cgl.gl.clear(cgl.gl.COLOR_BUFFER_BIT);
+    fb.renderEnd();
+    texOut.set(fb.getTextureColor());
+}
+
+
+};
+
+Ops.Gl.Textures.ColorTexture.prototype = new CABLES.Op();
+CABLES.OPS["59b94270-0364-4c0f-a9fc-ba2561696a23"]={f:Ops.Gl.Textures.ColorTexture,objName:"Ops.Gl.Textures.ColorTexture"};
 
 
 
@@ -31936,6 +31937,558 @@ function update()
 
 Ops.Array.SwitchArray.prototype = new CABLES.Op();
 CABLES.OPS["3fab881c-c2cf-42a0-9c42-2d8edfd93f57"]={f:Ops.Array.SwitchArray,objName:"Ops.Array.SwitchArray"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Math.Modulo
+// 
+// **************************************************************
+
+Ops.Math.Modulo = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const result = op.outValue("result");
+const number1 = op.inValueFloat("number1");
+const number2 = op.inValueFloat("number2");
+const pingpong = op.inValueBool("pingpong");
+
+// pointer to function
+let calculateFunction = calculateModule;
+
+number1.onChange = exec;
+number2.onChange = exec;
+
+number1.set(1);
+number2.set(2);
+
+pingpong.onChange = updatePingPong;
+
+function exec()
+{
+    let n2 = number2.get();
+    let n1 = number1.get();
+
+    result.set(calculateFunction(n1, n2));
+}
+
+function calculateModule(n1, n2)
+{
+    let re = ((n1 % n2) + n2) % n2;
+    if (re != re) re = 0;
+    return re;
+}
+
+function calculatePingPong(i, n)
+{
+    let cycle = 2 * n;
+    i %= cycle;
+    if (i >= n) return cycle - i;
+    else return i;
+
+    // let r = ((n1 % n2) + n2) % n2 * 2;
+    // if (r > n2) return n2 * 2.0 - r;
+    // else return r;
+}
+
+function updatePingPong()
+{
+    if (pingpong.get()) calculateFunction = calculatePingPong;
+    else calculateFunction = calculateModule;
+}
+
+
+};
+
+Ops.Math.Modulo.prototype = new CABLES.Op();
+CABLES.OPS["ebc13b25-3705-4265-8f06-5f985b6a7bb1"]={f:Ops.Math.Modulo,objName:"Ops.Math.Modulo"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Ui.VizNumberBar
+// 
+// **************************************************************
+
+Ops.Ui.VizNumberBar = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    inNum = op.inFloat("Number", 0);
+    // inDrawBar=op.inBool("Draw Bar",true),
+    // inDrawNUm=op.inBool("Draw Number",true);
+
+op.setUiAttrib({ "height": 100, "width": 200, "resizable": true });
+
+let max = -Number.MAX_VALUE;
+let min = Number.MAX_VALUE;
+
+inNum.onLinkChanged = () =>
+{
+    max = -Number.MAX_VALUE;
+    min = Number.MAX_VALUE;
+};
+
+op.renderVizLayer = (ctx, layer) =>
+{
+    ctx.fillStyle = "#222";
+    ctx.fillRect(
+        layer.x, layer.y,
+        layer.width, layer.height);
+
+    // if(inDrawBar.get())
+    {
+        max = Math.max(max, inNum.get());
+        min = Math.min(min, inNum.get());
+
+        if (op.uiAttribs.color)ctx.fillStyle = op.uiAttribs.color;
+        else ctx.fillStyle = "#555";
+
+        let a = CABLES.map(0, min, max, 0, layer.width);
+        let b = CABLES.map(inNum.get(), min, max, 0, layer.width);
+
+        let xMin = Math.min(a, b);
+        let xMax = Math.max(a, b);
+
+        ctx.fillRect(
+            xMin + layer.x, layer.y,
+            xMax - xMin, layer.height);
+    }
+
+    // if(inDrawNUm.get())
+    {
+        const padding = 10;
+        if (op.uiAttribs.color)ctx.fillStyle = "#fff";
+        else ctx.fillStyle = "#ccc";
+
+        const fontSize = layer.height * 0.7;
+        ctx.font = "normal " + fontSize + "px sourceCodePro";
+        ctx.fillText(Math.round(inNum.get() * 10000) / 10000, layer.x + padding, layer.y + fontSize);
+    }
+};
+
+
+};
+
+Ops.Ui.VizNumberBar.prototype = new CABLES.Op();
+CABLES.OPS["37575d2e-4ba6-4d2b-b00c-c503666867c5"]={f:Ops.Ui.VizNumberBar,objName:"Ops.Ui.VizNumberBar"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Array.InfoArray
+// 
+// **************************************************************
+
+Ops.Array.InfoArray = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    inArr=op.inArray("Array"),
+    outMin=op.outValue("Min"),
+    outMax=op.outValue("Max"),
+    outAvg=op.outValue("Average");
+
+inArr.onChange=function()
+{
+    var arr=inArr.get();
+
+    var min=999999999;
+    var max=-999999999;
+    var avg=0;
+
+    if(arr)
+    {
+        for(var i=0;i<arr.length;i++)
+        {
+            avg+=arr[i];
+            min=Math.min(min,arr[i]);
+            max=Math.max(max,arr[i]);
+        }
+        avg/=arr.length;
+    }
+    outMin.set(min);
+    outMax.set(max);
+    outAvg.set(avg);
+};
+
+};
+
+Ops.Array.InfoArray.prototype = new CABLES.Op();
+CABLES.OPS["1db230c8-212f-4679-87d6-3531659363da"]={f:Ops.Array.InfoArray,objName:"Ops.Array.InfoArray"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.WaveformGradient_v2
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.WaveformGradient_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"waveform_v2_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float uFreq;\nUNI float uOffset;\nUNI float uPow;\nUNI float uRotate;\nUNI float amount;\n\nUNI float r;\nUNI float g;\nUNI float b;\n\n{{CGL.BLENDMODES}}\n\n#define PI 3.14159265359\n#define TAU (2.0 * PI)\n\nvoid pR(inout vec2 p, float a)\n{\n    float s = sin(a),c=cos(a); p *= mat2(c,s,-s,c);\n}\n\nfloat pModMirror1(inout float p, float size) {\n\tfloat halfsize = size * 0.5;\n\tfloat c = floor((p + halfsize)/size);\n\tp = mod(p + halfsize,size) - halfsize;\n\tp *= mod(c, 2.0) * 2.0 - 1.0;\n\treturn c;\n}\n\nvoid main()\n{\n    vec2 uv = texCoord;\n    float v = 0.0;\n\n    uv -= 0.5;\n    pR(uv,TAU * uRotate);\n    uv += 0.5 + uOffset;\n\n    uv.x *= uFreq;\n\n    #ifdef MODE_SINE\n        uv.x += 0.5;\n        pModMirror1(uv.x,1.0);\n        v = pow(cos(PI * uv.x / 2.0),uPow);\n    #endif\n\n    #ifdef MODE_SAW\n        uv.x = mod(uv.x,1.0);\n        v = pow(min(cos(PI * uv.x /2.0),1.0 - abs(uv.x)),uPow);\n    #endif\n\n    #ifdef MODE_TRI\n        uv.x += 0.5;\n        pModMirror1(uv.x,1.0);\n        uv.x = -abs(uv.x);\n        uv.x = fract(uv.x);\n        v = pow(uv.x,uPow);\n    #endif\n\n    #ifdef MODE_SQR\n        pModMirror1(uv.x,1.0);\n        uv.x = -abs(uv.x);\n        uv.x = fract(uv.x);\n        v = step(uv.x,uPow);\n    #endif\n\n    vec4 col = vec4(vec3(r,g,b),1.0);\n    vec4 base = texture(tex,texCoord);\n\n    outColor = cgl_blend(base,col,v*amount);\n}\n",};
+const
+    render = op.inTrigger("render"),
+    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
+    amount = op.inValueSlider("Amount", 1),
+    mode = op.inValueSelect("Mode", ["Sine", "Sawtooth", "Triangle", "Square"], "Sine"),
+    freq = op.inValue("Frequency", 4),
+    pow = op.inValue("Pow factor", 6),
+    offset = op.inValue("Offset", 0),
+    rotate = op.inFloatSlider("Rotate", 0),
+    r = op.inValueSlider("r", 1.0),
+    g = op.inValueSlider("g", 1.0),
+    b = op.inValueSlider("b", 1.0),
+    trigger = op.outTrigger("trigger");
+
+op.setPortGroup("Waveform", [mode, freq, pow, offset, rotate]);
+op.setPortGroup("Color", [r, g, b]);
+
+r.setUiAttribs({ "colorPick": true });
+
+const cgl = op.patch.cgl;
+const shader = new CGL.Shader(cgl, op.name);
+
+shader.setSource(shader.getDefaultVertexShader(), attachments.waveform_v2_frag);
+
+mode.onChange = updateMode;
+
+const
+    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
+    freqUniform = new CGL.Uniform(shader, "f", "uFreq", freq),
+    offsetUniform = new CGL.Uniform(shader, "f", "uOffset", offset),
+    powUniform = new CGL.Uniform(shader, "f", "uPow", pow),
+    rotateUniform = new CGL.Uniform(shader, "f", "uRotate", rotate),
+    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
+    uniformR = new CGL.Uniform(shader, "f", "r", r),
+    uniformG = new CGL.Uniform(shader, "f", "g", g),
+    uniformB = new CGL.Uniform(shader, "f", "b", b);
+
+updateMode();
+
+CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
+
+function updateMode()
+{
+    shader.removeDefine("MODE_SAW");
+    shader.removeDefine("MODE_SINE");
+    shader.removeDefine("MODE_TRI");
+    shader.removeDefine("MODE_SQR");
+
+    if (mode.get() == "Sine")shader.define("MODE_SINE");
+    else if (mode.get() == "Sawtooth")shader.define("MODE_SAW");
+    else if (mode.get() == "Triangle")shader.define("MODE_TRI");
+    else if (mode.get() == "Square")shader.define("MODE_SQR");
+}
+
+render.onTriggered = function ()
+{
+    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
+
+    cgl.pushShader(shader);
+    cgl.currentTextureEffect.bind();
+
+    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
+
+    cgl.currentTextureEffect.finish();
+    cgl.popShader();
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.WaveformGradient_v2.prototype = new CABLES.Op();
+CABLES.OPS["08d2ef19-3517-4c15-b9c6-56dc107e10ef"]={f:Ops.Gl.TextureEffects.WaveformGradient_v2,objName:"Ops.Gl.TextureEffects.WaveformGradient_v2"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureToPoints
+// 
+// **************************************************************
+
+Ops.Gl.TextureToPoints = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    cgl = op.patch.cgl,
+    pUpdate = op.inTriggerButton("update"),
+    inNum=op.inValueInt("Num Points",2000),
+    inSeed=op.inValueFloat("Seed",1),
+    zPos = op.inSwitch("Z Position",['None','Red','Green','Blue','Alpha'],'Red'),
+    zMultiply = op.inValueFloat("Z Multiply",1.0),
+    tex = op.inObject("texture"),
+    outTrigger = op.outTrigger("trigger"),
+    outPoints = op.outArray("Points"),
+    outPointsNum = op.outValue("NumPoints");
+
+var fb = null,
+    pixelData = null,
+    texChanged = false;
+
+op.toWorkPortsNeedToBeLinked(tex,outPoints);
+
+tex.onChange = function (){ texChanged=true; };
+
+var channelType=op.patch.cgl.gl.UNSIGNED_BYTE;
+var points=[];
+
+pUpdate.onTriggered =updatePixels;
+
+const NUM_COL_CHANNELS=4;
+
+
+function updatePixels ()
+{
+    var realTexture = tex.get(), gl = cgl.gl;
+
+    if (!realTexture) return;
+    if (!fb) fb = gl.createFramebuffer();
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+    if (texChanged)
+    {
+        gl.framebufferTexture2D(
+           gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+           gl.TEXTURE_2D, realTexture.tex, 0
+        );
+
+        pixelData = new Uint8Array(realTexture.width*realTexture.height*NUM_COL_CHANNELS);
+        texChanged = false;
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+
+    gl.readPixels(
+        0, 0,
+        realTexture.width,
+        realTexture.height,
+        gl.RGBA,
+        channelType,
+        pixelData
+    );
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    var num=inNum.get();
+    var numPixels=pixelData.length;
+
+    if(num*3!=points.length)points.length=num*3;
+
+    Math.randomSeed=inSeed.get();
+
+    var pixelStepX=1/realTexture.width;
+    var pixelStepY=1/realTexture.height;
+
+    var offsetX=pixelStepX*realTexture.width/2;
+    var offsetY=pixelStepY*realTexture.height/2;
+
+    var ind=0;
+    var count=0;
+
+    var colChanOffset=0;
+    if(zPos.get()=="Green")colChanOffset=1;
+        else if(zPos.get()=="Blue")colChanOffset=2;
+        else if(zPos.get()=="Alpha")colChanOffset=3;
+        else if(zPos.get()=="None")colChanOffset=4;
+
+    while(ind<num*3)
+    {
+        count++;
+        if(count>num*3*100)return;
+        var x=Math.floor(Math.seededRandom()*realTexture.width);
+        var y=Math.floor(Math.seededRandom()*realTexture.height);
+        var intens=pixelData[(x+(y*realTexture.width))*NUM_COL_CHANNELS+colChanOffset];
+
+        if(intens>10)
+        {
+            points[ind++]=((x*pixelStepX)-(offsetX));
+            points[ind++]=((y*pixelStepY)-(offsetY));
+
+            if(colChanOffset<4) points[ind++]=(intens/255)*zMultiply.get();
+            else points[ind++]=0;
+        }
+    }
+
+    // var off=14;
+    // var offy=15;
+    // var x=0;
+    // var y=0;
+    // while(ind<num*3)
+    // {
+
+    //     count++;
+    //     if(count>num*3*100)return;
+    //     x+=off;
+    //     y+=offy;
+    //     if(x>realTexture.width || y>realTexture.height)
+    //     {
+
+    //         off=off-(Math.random()*4-2);
+    //         offy=offy-(Math.random()*4-2);
+    //         x=off;
+    //         y=offy;
+    //     }
+
+    //     x=Math.abs(Math.floor(x));
+    //     y=Math.abs(Math.floor(y));
+
+    //     var intens=pixelData[(x+(y*realTexture.width))*NUM_COL_CHANNELS+colChanOffset];
+
+    //     if(intens>10)
+    //     {
+    //         points[ind++]=((x*pixelStepX)-(offsetX));
+    //         points[ind++]=((y*pixelStepY)-(offsetY));
+
+    //         if(colChanOffset<4) points[ind++]=(intens/255);
+    //         else points[ind++]=0;
+    //     }
+    // }
+
+    outPointsNum.set(ind/3);
+    outPoints.set(null);
+    outPoints.set(points);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    outTrigger.trigger();
+}
+
+
+};
+
+Ops.Gl.TextureToPoints.prototype = new CABLES.Op();
+CABLES.OPS["ff757f51-fbb0-4728-b158-644094cd160e"]={f:Ops.Gl.TextureToPoints,objName:"Ops.Gl.TextureToPoints"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Browser.BrowserInfo_v3
+// 
+// **************************************************************
+
+Ops.Browser.BrowserInfo_v3 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    isMobile = op.outBool("Is Mobile", false),
+    isTouch = op.outBool("Is Touchscreen", false),
+    isIe = op.outBool("Is IE", false),
+    isEdge = op.outBool("Is Edge", false),
+    isChrome = op.outBool("Is Chrome", false),
+    isFirefox = op.outBool("Is Firefox", false),
+    isOpera = op.outBool("Is Opera", false),
+    isSafari = op.outBool("Is Safari", false),
+    isWindows = op.outBool("Is Windows", false),
+    isLinux = op.outBool("Is Linux", false),
+    isMac = op.outBool("Is Mac", false),
+    isIos = op.outBool("Is iOS", false),
+    isAndroid = op.outBool("Is Android", false),
+    isElectron = op.outBool("Is Electron", false),
+    outOS = op.outString("Operating System", ""),
+    outBrowserName = op.outString("Browser Name", ""),
+    outVersion = op.outString("OS Version", ""),
+    outNav = op.outString("Language"),
+    outUA = op.outString("User Agent");
+
+op.setPortGroup("Browsers", [isIe, isEdge, isChrome, isFirefox, isOpera, isSafari]);
+op.setPortGroup("Operating Systems", [isWindows, isLinux, isMac, isIos, isAndroid, isElectron]);
+op.setPortGroup("Textual Information", [outOS, outBrowserName, outNav, outVersion, outUA]);
+const pf = platform;
+
+const osFamily = pf.os.family;
+
+const isOperaBool = pf.name === "Opera";
+const isSafariBool = pf.name === "Safari";
+const isIEBool = pf.name === "IE";
+const isEdgeBool = pf.name === "Microsoft Edge";
+const isChromeBool = pf.name === "Chrome" || pf.name === "Chrome Mobile";
+const isBlinkBool = pf.layout === "Blink";
+const isFirefoxBool = pf.name === "Firefox" || pf.name === "Firefox Mobile" || pf.name === "Firefox for iOS";
+
+const isLinuxBool = osFamily === "Linux"
+    || osFamily === "Ubuntu"
+    || osFamily === "SuSE"
+    || osFamily === "Fedora"
+    || osFamily === "OpenBSD"
+    || osFamily === "Debian"
+    || osFamily === "Red Hat";
+
+const isMacBool = osFamily === "Mac" || osFamily === "Macintosh" || osFamily === "Mac OS X" || osFamily === "OS X";
+const isWindowsBool = osFamily === "Windows" || osFamily === "Windows 98;";
+const isAndroidBool = osFamily === "Android";
+const isIosBool = osFamily === "iOS";
+const isMobileBool = (osFamily === "webOS" // LG mobile phones
+    || osFamily === "Windows Phone"
+    || osFamily === "Android"
+    || osFamily === "iOS")
+    ||
+    (pf.name === "Chrome Mobile"
+    || pf.name === "Firefox for iOS"
+    || pf.name === "Firefox Mobile"
+    || pf.name === "IE Mobile"
+    || pf.name === "Opera Mobile");
+const isElectronBool = pf.name === "Electron";
+
+const isTouchDevice = (
+    ("ontouchstart" in window) ||
+        (navigator.maxTouchPoints > 0) ||
+        (navigator.msMaxTouchPoints > 0));
+
+isMobile.set(isMobileBool);
+isTouch.set(isTouchDevice);
+
+isIe.set(isIEBool);
+isEdge.set(isEdgeBool);
+isChrome.set(isChromeBool);
+isFirefox.set(isFirefoxBool);
+isOpera.set(isOperaBool);
+isSafari.set(isSafariBool);
+
+isMac.set(isMacBool);
+isLinux.set(isLinuxBool);
+isWindows.set(isWindowsBool);
+isIos.set(isIosBool);
+isAndroid.set(isAndroidBool);
+isElectron.set(isElectronBool);
+
+outNav.set(navigator.language || navigator.userLanguage);
+outUA.set(pf.ua);
+outVersion.set(pf.os.version);
+outOS.set(pf.os.toString());
+outBrowserName.set(pf.name);
+
+
+};
+
+Ops.Browser.BrowserInfo_v3.prototype = new CABLES.Op();
+CABLES.OPS["ec3e0121-b2c2-4c31-bbda-a6982080f73f"]={f:Ops.Browser.BrowserInfo_v3,objName:"Ops.Browser.BrowserInfo_v3"};
 
 
 window.addEventListener('load', function(event) {
