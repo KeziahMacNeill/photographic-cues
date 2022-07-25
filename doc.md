@@ -23,6 +23,7 @@
 * __font_fam_1__ ```String```
 * __font_fam_2__ ```String```
 * __font_fam_3__ ```String```
+* __fonts_loaded__ ```Number```
 * __fullscreen_button_hover__ ```Number```
 * __gallery_draw_bodies__ ```Number```
 * __gallery_height__ ```Number```

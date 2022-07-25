@@ -32612,6 +32612,91 @@ Ops.Html.FontFile_v2.prototype = new CABLES.Op();
 CABLES.OPS["68177370-116e-4c76-aef3-3b10d68e7227"]={f:Ops.Html.FontFile_v2,objName:"Ops.Html.FontFile_v2"};
 
 
+
+
+// **************************************************************
+// 
+// Ops.Trigger.TriggerCounter
+// 
+// **************************************************************
+
+Ops.Trigger.TriggerCounter = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    exe = op.inTriggerButton("exe"),
+    reset = op.inTriggerButton("reset"),
+    trigger = op.outTrigger("trigger"),
+    num = op.outValue("timesTriggered");
+
+op.toWorkPortsNeedToBeLinked(exe);
+
+let n = 0;
+
+reset.onTriggered =
+op.onLoaded =
+    doReset;
+
+exe.onTriggered = function ()
+{
+    n++;
+    num.set(n);
+    op.setUiAttrib({ "extendTitle": n });
+    trigger.trigger();
+};
+
+function doReset()
+{
+    n = 0;
+    op.setUiAttrib({ "extendTitle": n });
+    num.set(n);
+}
+
+
+};
+
+Ops.Trigger.TriggerCounter.prototype = new CABLES.Op();
+CABLES.OPS["e640619f-235c-4543-bbf8-b358e0283180"]={f:Ops.Trigger.TriggerCounter,objName:"Ops.Trigger.TriggerCounter"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Trigger.TriggerIfIncreased
+// 
+// **************************************************************
+
+Ops.Trigger.TriggerIfIncreased = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    value = op.inFloat("Value"),
+    trigger = op.outTrigger("Trigger");
+
+let lastValue = -Number.MAX_VALUE;
+
+value.onChange = function ()
+{
+    const v = value.get();
+    if (v > lastValue)
+    {
+        trigger.trigger();
+    }
+    lastValue = v;
+};
+
+
+};
+
+Ops.Trigger.TriggerIfIncreased.prototype = new CABLES.Op();
+CABLES.OPS["bc820891-48c7-4287-9b5e-4196e192741b"]={f:Ops.Trigger.TriggerIfIncreased,objName:"Ops.Trigger.TriggerIfIncreased"};
+
+
 window.addEventListener('load', function(event) {
 CABLES.jsLoaded=new Event('CABLES.jsLoaded');
 document.dispatchEvent(CABLES.jsLoaded);
