@@ -26426,49 +26426,6 @@ CABLES.OPS["588302cb-f5a7-4129-90d2-ba66212d69e5"]={f:Ops.Gl.TextureEffects.Vign
 
 // **************************************************************
 // 
-// Ops.String.StringReplace
-// 
-// **************************************************************
-
-Ops.String.StringReplace = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    inStr = op.inString("String"),
-    inSearch = op.inString("Search For", "foo"),
-    inRepl = op.inString("Replace", "bar"),
-    inWhat = op.inSwitch("Replace What", ["All", "First"], "All"),
-    outStr = op.outString("Result");
-
-inRepl.onChange =
-inStr.onChange =
-inWhat.onChange =
-inSearch.onChange = update;
-
-function update()
-{
-    let str = "";
-
-    // if(inWhat.get()=="All") str=String(inStr.get()).replaceAll(inSearch.get(),inRepl.get());
-    if (inWhat.get() == "All") str = String(inStr.get()).replace(new RegExp(inSearch.get(), "g"), inRepl.get());
-    else str = String(inStr.get()).replace(inSearch.get(), inRepl.get());
-
-    outStr.set(str);
-}
-
-
-};
-
-Ops.String.StringReplace.prototype = new CABLES.Op();
-CABLES.OPS["4a053e7a-6b00-4e71-bd51-90cdb190994c"]={f:Ops.String.StringReplace,objName:"Ops.String.StringReplace"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Html.ElementCssTransform
 // 
 // **************************************************************
@@ -29519,131 +29476,6 @@ CABLES.OPS["a82ae429-ac07-4760-882b-595a857c7ae0"]={f:Ops.Gl.Textures.SwitchText
 
 // **************************************************************
 // 
-// Ops.User.mick.GoogleFontFile
-// 
-// **************************************************************
-
-Ops.User.mick.GoogleFontFile = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    filename = op.inUrl("file", [".otf", ".ttf", ".woff", ".woff2"]),
-    fontname = op.inString("family"),
-    outLoaded = op.outValue("Loaded"),
-    loadedTrigger = op.outTrigger("Loaded Trigger");
-
-let loadingId = null;
-
-filename.onChange = function ()
-{
-    outLoaded.set(false);
-    addStyle();
-};
-
-fontname.onChange = addStyle;
-
-let fontFaceObj;
-
-function url_domain(data) {
-  var    a      = document.createElement('a');
-         a.href = data;
-  return a.hostname;
-}
-
-function addStyle()
-{
-    // console.log(url_domain(filename.get()));
-    if (filename.get() && fontname.get())
-    {
-        if (document.fonts)
-        {
-
-            if(url_domain(filename.get()) == "fonts.googleapis.com" ) {
-                console.log("google font!");
-                const head = document.querySelector("head");
-                //   console.log(head);
-
-                head.innerHTML += '<link rel="preconnect" href="https://fonts.googleapis.com/%22%3E';
-                head.innerHTML += '<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>';
-                head.innerHTML += '<link href="'+filename.get()+'" rel="stylesheet">';
-
-
-                const fileUrl = op.patch.getFilePath(String(filename.get()));
-                const styleStr = 'font-family: "' + fontname.get() + '";';
-
-                const style = document.createElement("style");
-                style.type = "text/css";
-                style.innerHTML = styleStr;
-                document.getElementsByTagName("head")[document.getElementsByTagName("head").length - 1].appendChild(style);
-
-            } else {
-
-                fontFaceObj = new FontFace(fontname.get(), "url(" + op.patch.getFilePath(String(filename.get())) + ")");
-
-                loadingId = op.patch.cgl.patch.loading.start("FontFile", filename.get());
-
-                // Add the FontFace to the FontFaceSet
-                document.fonts.add(fontFaceObj);
-
-                // Get the current status of the FontFace
-                // (should be 'unloaded')
-
-                // Load the FontFace
-                fontFaceObj.load();
-
-                // Get the current status of the Fontface
-                // (should be 'loading' or 'loaded' if cached)
-
-                // Wait until the font has been loaded, log the current status.
-                fontFaceObj.loaded.then((fontFace) =>
-                {
-                    outLoaded.set(true);
-                    loadedTrigger.trigger();
-                    op.patch.cgl.patch.loading.finished(loadingId);
-
-                    op.patch.emitEvent("fontLoaded", fontname.get());
-
-                    // Throw an error if loading wasn't successful
-                }, (fontFace) =>
-                {
-                    op.setUiError("loadingerror", "Font loading error!" + fontFaceObj.status);
-                    // op.logError("Font loading error! Current status", fontFaceObj.status);
-                });
-
-            }
-        }
-        else
-        { // font loading api not supported
-            const fileUrl = op.patch.getFilePath(String(filename.get()));
-            const styleStr = ""
-                .endl() + "@font-face"
-                .endl() + "{"
-                .endl() + "  font-family: \"" + fontname.get() + "\";"
-                .endl() + "  src: url(\"" + fileUrl + "\") format(\"truetype\");"
-                .endl() + "}";
-
-            const style = document.createElement("style");
-            style.type = "text/css";
-            style.innerHTML = styleStr;
-            document.getElementsByTagName("head")[document.getElementsByTagName("head").length - 1].appendChild(style);
-            // TODO: Poll if font loaded
-        }
-    }
-}
-
-
-};
-
-Ops.User.mick.GoogleFontFile.prototype = new CABLES.Op();
-
-
-
-
-
-// **************************************************************
-// 
 // Ops.Array.ArraySum
 // 
 // **************************************************************
@@ -31857,6 +31689,49 @@ CABLES.OPS["0f8ee026-e094-484d-8403-547c92293be9"]={f:Ops.Array.ArrayIteratorStr
 
 // **************************************************************
 // 
+// Ops.String.StringReplace
+// 
+// **************************************************************
+
+Ops.String.StringReplace = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    inStr = op.inString("String"),
+    inSearch = op.inString("Search For", "foo"),
+    inRepl = op.inString("Replace", "bar"),
+    inWhat = op.inSwitch("Replace What", ["All", "First"], "All"),
+    outStr = op.outString("Result");
+
+inRepl.onChange =
+inStr.onChange =
+inWhat.onChange =
+inSearch.onChange = update;
+
+function update()
+{
+    let str = "";
+
+    // if(inWhat.get()=="All") str=String(inStr.get()).replaceAll(inSearch.get(),inRepl.get());
+    if (inWhat.get() == "All") str = String(inStr.get()).replace(new RegExp(inSearch.get(), "g"), inRepl.get());
+    else str = String(inStr.get()).replace(inSearch.get(), inRepl.get());
+
+    outStr.set(str);
+}
+
+
+};
+
+Ops.String.StringReplace.prototype = new CABLES.Op();
+CABLES.OPS["4a053e7a-6b00-4e71-bd51-90cdb190994c"]={f:Ops.String.StringReplace,objName:"Ops.String.StringReplace"};
+
+
+
+
+// **************************************************************
+// 
 // Ops.Array.ArraySetString
 // 
 // **************************************************************
@@ -32640,6 +32515,101 @@ update();
 
 Ops.String.SwitchStringBoolean.prototype = new CABLES.Op();
 CABLES.OPS["19e3c428-22ce-45a3-b903-fddfc46fc0a3"]={f:Ops.String.SwitchStringBoolean,objName:"Ops.String.SwitchStringBoolean"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Html.FontFile_v2
+// 
+// **************************************************************
+
+Ops.Html.FontFile_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    filename = op.inUrl("file", [".otf", ".ttf", ".woff", ".woff2"]),
+    fontname = op.inString("family"),
+    outLoaded = op.outValue("Loaded"),
+    loadedTrigger = op.outTrigger("Loaded Trigger");
+
+let loadingId = null;
+
+filename.onChange = function ()
+{
+    outLoaded.set(false);
+    addStyle();
+};
+
+fontname.onChange = addStyle;
+
+let fontFaceObj;
+
+function addStyle()
+{
+    if (filename.get() && fontname.get())
+    {
+        if (document.fonts)
+        {
+            fontFaceObj = new FontFace(fontname.get(), "url(" + op.patch.getFilePath(String(filename.get())) + ")");
+
+            loadingId = op.patch.cgl.patch.loading.start("FontFile", filename.get());
+
+            // Add the FontFace to the FontFaceSet
+            document.fonts.add(fontFaceObj);
+
+            // Get the current status of the FontFace
+            // (should be 'unloaded')
+
+            // Load the FontFace
+            fontFaceObj.load();
+
+            // Get the current status of the Fontface
+            // (should be 'loading' or 'loaded' if cached)
+
+            // Wait until the font has been loaded, log the current status.
+            fontFaceObj.loaded.then((fontFace) =>
+            {
+                outLoaded.set(true);
+                loadedTrigger.trigger();
+                op.patch.cgl.patch.loading.finished(loadingId);
+
+                op.patch.emitEvent("fontLoaded", fontname.get());
+
+                // Throw an error if loading wasn't successful
+            }, (fontFace) =>
+            {
+                op.setUiError("loadingerror", "Font loading error!" + fontFaceObj.status);
+                // op.logError("Font loading error! Current status", fontFaceObj.status);
+            });
+        }
+        else
+        { // font loading api not supported
+            const fileUrl = op.patch.getFilePath(String(filename.get()));
+            const styleStr = ""
+                .endl() + "@font-face"
+                .endl() + "{"
+                .endl() + "  font-family: \"" + fontname.get() + "\";"
+                .endl() + "  src: url(\"" + fileUrl + "\") format(\"truetype\");"
+                .endl() + "}";
+
+            const style = document.createElement("style");
+            style.type = "text/css";
+            style.innerHTML = styleStr;
+            document.getElementsByTagName("head")[document.getElementsByTagName("head").length - 1].appendChild(style);
+            // TODO: Poll if font loaded
+        }
+    }
+}
+
+
+};
+
+Ops.Html.FontFile_v2.prototype = new CABLES.Op();
+CABLES.OPS["68177370-116e-4c76-aef3-3b10d68e7227"]={f:Ops.Html.FontFile_v2,objName:"Ops.Html.FontFile_v2"};
 
 
 window.addEventListener('load', function(event) {
