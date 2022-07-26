@@ -32701,8 +32701,8 @@ function loadScript(callback) {
     const head = document.head;
     const script = document.createElement('script');
     script.type = "text/javascript";
+    // script.setAttribute("async", "");
     script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
-    //script.setAttribute("async", "");
     script.onreadystatechange = callback;
     script.onload = callback;
 
@@ -32772,7 +32772,7 @@ inLoad.onTriggered = () => {
     }
 
     loadScript(() => {
-        // console.log('Google Analytics loaded');
+        console.log('Google Analytics loaded');
         window.dataLayer = window.dataLayer || [];
         window.gtag = () => {window.dataLayer.push(arguments); }
 
@@ -32781,7 +32781,7 @@ inLoad.onTriggered = () => {
         window.gtag('config', inGID.get());
 
         const state = readAnalyticsCookieState();
-        // console.log('STATE:', state);
+        console.log('STATE:', state);
         switch(state) {
             case 'unset':
                 // doConsent();
@@ -32836,7 +32836,6 @@ inDisableAnalytics.onTriggered = () => {
     outShowBanner.set(false);
     outConsent.set(false);
 }
-
 
 };
 
