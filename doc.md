@@ -99,5 +99,6 @@
 * __tutorial_colorarea_position_z__ ```Number```
 * __tutorial_colorarea_size__ ```Number```
 * __tutorial_transition__ ```Number```
+* __water_data_offset__ ```Number```
 * __water_level__ ```Number```
 

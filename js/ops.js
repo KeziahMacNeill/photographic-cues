@@ -24592,34 +24592,6 @@ CABLES.OPS["fc6fbe7c-4bf8-4fdc-bd37-95b9f50a5bf2"]={f:Ops.Gl.TextureEffects.Nois
 
 // **************************************************************
 // 
-// Ops.Boolean.IsOne
-// 
-// **************************************************************
-
-Ops.Boolean.IsOne = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    val=op.inValue("Value"),
-    result=op.outValue("Result",false);
-
-val.onChange=function()
-{
-    result.set(val.get()==1);
-};
-
-};
-
-Ops.Boolean.IsOne.prototype = new CABLES.Op();
-CABLES.OPS["695d35e2-ffe6-498d-9242-12dc4bcb3c2d"]={f:Ops.Boolean.IsOne,objName:"Ops.Boolean.IsOne"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.TextureEffects.AlphaMask_v2
 // 
 // **************************************************************
@@ -30896,181 +30868,6 @@ CABLES.OPS["ad7eea9a-f4af-4ab7-bb70-922242529681"]={f:Ops.Html.ElementChilds_v2,
 
 // **************************************************************
 // 
-// Ops.User.mick.GoogleAnalytics
-// 
-// **************************************************************
-
-Ops.User.mick.GoogleAnalytics = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const inLoad = op.inTriggerButton("Load");
-const inGID = op.inString("GA_MEASUREMENT_ID");
-const inConsent = op.inTriggerButton('Consent to be tracked (full analytics)');
-const inRevokeConsent = op.inTriggerButton('Do not consent (basic analytics)');
-const inDisableAnalytics = op.inTriggerButton('Disable Google Analytics');
-const inResetBanner = op.inTriggerButton('Reset banner cookie');
-
-const outTrigger = op.outTrigger('Loaded trigger');
-const outLoaded = op.outBool("Loaded");
-const outConsent = op.outBool('Consent ok');
-const outShowBanner = op.outBool('Show banner');
-
-
-const COOKIE_NAME = "cables_google_analytics_consent";
-
-function loadScript(callback) {
-    const head = document.head;
-    const script = document.createElement('script');
-    script.type = "text/javascript";
-    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
-    script.setAttribute("async", "");
-    script.onreadystatechange = callback;
-    script.onload = callback;
-
-    head.appendChild(script);
-}
-
-function doNotConsent() {
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    }
-    window.gtag('consent', 'default', {
-      'ad_storage': 'denied',
-      'analytics_storage': 'denied'
-    });
-}
-
-function doConsent() {
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    }
-    window.gtag('consent', 'update', {
-      'ad_storage': 'granted',
-      'analytics_storage': 'granted'
-    });
-}
-
-function disableAnalytics() {
-    window['ga-disable-' + inGID.get()] = true;
-    console.log('Google Analytics disabled');
-}
-
-
-function readAnalyticsCookieState() {
-    const toks = document.cookie.split('; ');
-
-    if (!toks.find(row => row.startsWith(COOKIE_NAME)))
-        return 'unset';
-
-    if (toks.some((item) => item.includes(`${COOKIE_NAME}=true`)))
-        return 'consent';
-
-    if (toks.some((item) => item.includes(`${COOKIE_NAME}=false`)))
-        return 'donotconsent';
-
-    return 'unset'
-}
-
-function setAnalyticsCookie(consent) {
-    document.cookie = `${COOKIE_NAME}=${consent}; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=None; Secure`;
-}
-
-function deleteCookie() {
-    document.cookie = `${COOKIE_NAME}=; Max-Age=0`
-}
-
-inLoad.onTriggered = () => {
-    outLoaded.set(false);
-    outConsent.set(false);
-
-    if (!inGID.get()) {
-        console.error('Empty GA_MEASUREMENT_ID');
-        return;
-    }
-
-    loadScript(() => {
-        // console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
-
-
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
-
-        const state = readAnalyticsCookieState();
-        // console.log('STATE:', state);
-        switch(state) {
-            case 'unset':
-                // doConsent();
-                // setAnalyticsCookie(true);
-                outShowBanner.set(true);
-                outConsent.set(false);
-                break;
-            case 'consent':
-                doConsent();
-                outConsent.set(true);
-                outShowBanner.set(false);
-                break;
-            case 'donotconsent':
-                doNotConsent();
-                // setAnalyticsCookie(false);
-                outConsent.set(false);
-                outShowBanner.set(false);
-                break;
-
-            default:
-                break;
-        }
-        outLoaded.set(true);
-        outTrigger.trigger();
-    });
-};
-
-inConsent.onTriggered = () => {
-    doConsent();
-    setAnalyticsCookie(true);
-    outConsent.set(true);
-    outShowBanner.set(false);
-}
-
-inRevokeConsent.onTriggered = () => {
-    doNotConsent()
-    setAnalyticsCookie(false);
-    outConsent.set(false);
-    outShowBanner.set(false);
-}
-
-inResetBanner.onTriggered = () => {
-    deleteCookie();
-    doConsent();
-    outConsent.set(true);
-    outShowBanner.set(true);
-}
-
-inDisableAnalytics.onTriggered = () => {
-    disableAnalytics();
-    deleteCookie();
-    outShowBanner.set(false);
-    outConsent.set(false);
-}
-
-
-};
-
-Ops.User.mick.GoogleAnalytics.prototype = new CABLES.Op();
-
-
-
-
-
-// **************************************************************
-// 
 // Ops.Html.FullscreenMode
 // 
 // **************************************************************
@@ -32695,6 +32492,356 @@ value.onChange = function ()
 
 Ops.Trigger.TriggerIfIncreased.prototype = new CABLES.Op();
 CABLES.OPS["bc820891-48c7-4287-9b5e-4196e192741b"]={f:Ops.Trigger.TriggerIfIncreased,objName:"Ops.Trigger.TriggerIfIncreased"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Anim.BoolAnim
+// 
+// **************************************************************
+
+Ops.Anim.BoolAnim = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const anim = new CABLES.Anim();
+
+const
+    exe = op.inTrigger("exe"),
+    bool = op.inValueBool("bool"),
+    pease = anim.createPort(op, "easing"),
+    duration = op.inValue("duration", 0.5),
+    dir = op.inValueSelect("Direction", ["Animate Both", "Only True", "Only False"], "Both"),
+    valueFalse = op.inValue("value false", 0),
+    valueTrue = op.inValue("value true", 1),
+    next = op.outTrigger("trigger"),
+    value = op.outValue("value"),
+    finished = op.outValueBool("finished"),
+    finishedTrigger = op.outTrigger("Finished Trigger");
+
+
+const startTime = CABLES.now();
+op.toWorkPortsNeedToBeLinked(exe);
+op.setPortGroup("Animation", [duration, pease]);
+op.setPortGroup("Values", [valueFalse, valueTrue]);
+
+dir.onChange = bool.onChange = valueFalse.onChange = valueTrue.onChange = duration.onChange = setAnim;
+setAnim();
+
+function setAnim()
+{
+    finished.set(false);
+    const now = (CABLES.now() - startTime) / 1000;
+    const oldValue = anim.getValue(now);
+    anim.clear();
+
+    anim.setValue(now, oldValue);
+
+
+    if (!bool.get())
+    {
+        if (dir.get() != "Only True") anim.setValue(now + duration.get(), valueFalse.get());
+        else anim.setValue(now, valueFalse.get());
+    }
+    else
+    {
+        if (dir.get() != "Only False") anim.setValue(now + duration.get(), valueTrue.get());
+        else anim.setValue(now, valueTrue.get());
+    }
+}
+
+
+exe.onTriggered = function ()
+{
+    const t = (CABLES.now() - startTime) / 1000;
+    value.set(anim.getValue(t));
+
+    if (anim.hasEnded(t))
+    {
+        if (!finished.get()) finishedTrigger.trigger();
+        finished.set(true);
+    }
+
+    next.trigger();
+};
+
+
+};
+
+Ops.Anim.BoolAnim.prototype = new CABLES.Op();
+CABLES.OPS["06ad9d35-ccf5-4d31-889c-e23fa062588a"]={f:Ops.Anim.BoolAnim,objName:"Ops.Anim.BoolAnim"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Trigger.TriggerExtender
+// 
+// **************************************************************
+
+Ops.Trigger.TriggerExtender = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+// inputs
+var inTriggerPort = op.inTriggerButton('Execute');
+
+// outputs
+var outTriggerPort = op.outTrigger('Next');
+
+// trigger listener
+inTriggerPort.onTriggered = function() {
+    outTriggerPort.trigger();
+};
+
+};
+
+Ops.Trigger.TriggerExtender.prototype = new CABLES.Op();
+CABLES.OPS["7ef594f3-4907-47b0-a2d3-9854eda1679d"]={f:Ops.Trigger.TriggerExtender,objName:"Ops.Trigger.TriggerExtender"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.Alpha
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.Alpha = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"clearAlpha_frag":"\n// void main()\n// {\n//     outColor.a=0.0;\n// }\n\nIN vec2 texCoord;\nUNI sampler2D tex;\nUNI float amount;\n\n\nvoid main()\n{\n    vec4 base=texture(tex,texCoord);\n\n    outColor=base;\n\n    #ifdef METH_NORM\n        outColor.a=amount;\n    #endif\n    #ifdef METH_ADD\n        outColor.a+=amount;\n    #endif\n    #ifdef METH_SUB\n        outColor.a-=amount;\n    #endif\n    #ifdef METH_MUL\n        outColor.a*=amount;\n    #endif\n\n    #ifdef DO_CLAMP\n    outColor.a=clamp(0.0,1.0,outColor.a);\n    #endif\n\n}\n",};
+const
+    render = op.inTrigger("Render"),
+    amount = op.inValueSlider("Amount", 1),
+    meth = op.inSwitch("Method", ["Set", "Add", "Sub", "Mul"], "Set"),
+    clamp = op.inBool("Clamp", true),
+    trigger = op.outTrigger("Next");
+
+const cgl = op.patch.cgl;
+const shader = new CGL.Shader(cgl, op.objName);
+const TEX_SLOT = 0;
+
+shader.setSource(shader.getDefaultVertexShader(), attachments.clearAlpha_frag || "");
+
+const uniformAmount = new CGL.Uniform(shader, "f", "amount", amount);
+const textureUniform = new CGL.Uniform(shader, "t", "tex", TEX_SLOT);
+
+clamp.onChange =
+    meth.onChange = updateDefines;
+updateDefines();
+
+function updateDefines()
+{
+    shader.toggleDefine("METH_NORM", meth.get() == "Set");
+    shader.toggleDefine("METH_ADD", meth.get() == "Add");
+    shader.toggleDefine("METH_SUB", meth.get() == "Sub");
+    shader.toggleDefine("METH_MUL", meth.get() == "Mul");
+    shader.toggleDefine("DO_CLAMP", clamp.get());
+}
+
+render.onTriggered = function ()
+{
+    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
+
+    cgl.pushShader(shader);
+    cgl.currentTextureEffect.bind();
+
+    cgl.setTexture(TEX_SLOT, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
+
+    cgl.currentTextureEffect.finish();
+    cgl.popShader();
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.Alpha.prototype = new CABLES.Op();
+CABLES.OPS["131687e0-77f5-4fd7-be57-864aa6559418"]={f:Ops.Gl.TextureEffects.Alpha,objName:"Ops.Gl.TextureEffects.Alpha"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.User.mick.GoogleAnalytics
+// 
+// **************************************************************
+
+Ops.User.mick.GoogleAnalytics = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const inLoad = op.inTriggerButton("Load");
+const inGID = op.inString("GA_MEASUREMENT_ID");
+const inConsent = op.inTriggerButton('Consent to be tracked (full analytics)');
+const inRevokeConsent = op.inTriggerButton('Do not consent (basic analytics)');
+const inDisableAnalytics = op.inTriggerButton('Disable Google Analytics');
+const inResetBanner = op.inTriggerButton('Reset banner cookie');
+
+const outTrigger = op.outTrigger('Loaded trigger');
+const outLoaded = op.outBool("Loaded");
+const outConsent = op.outBool('Consent ok');
+const outShowBanner = op.outBool('Show banner');
+
+
+const COOKIE_NAME = "cables_google_analytics_consent";
+
+function loadScript(callback) {
+    const head = document.head;
+    const script = document.createElement('script');
+    script.type = "text/javascript";
+    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
+    //script.setAttribute("async", "");
+    script.onreadystatechange = callback;
+    script.onload = callback;
+
+    head.appendChild(script);
+}
+
+function doNotConsent() {
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
+        return;
+    }
+    window.gtag('consent', 'default', {
+      'ad_storage': 'denied',
+      'analytics_storage': 'denied'
+    });
+}
+
+function doConsent() {
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
+        return;
+    }
+    window.gtag('consent', 'update', {
+      'ad_storage': 'granted',
+      'analytics_storage': 'granted'
+    });
+}
+
+function disableAnalytics() {
+    window['ga-disable-' + inGID.get()] = true;
+    console.log('Google Analytics disabled');
+}
+
+
+function readAnalyticsCookieState() {
+    const toks = document.cookie.split('; ');
+
+    if (!toks.find(row => row.startsWith(COOKIE_NAME)))
+        return 'unset';
+
+    if (toks.some((item) => item.includes(`${COOKIE_NAME}=true`)))
+        return 'consent';
+
+    if (toks.some((item) => item.includes(`${COOKIE_NAME}=false`)))
+        return 'donotconsent';
+
+    return 'unset'
+}
+
+function setAnalyticsCookie(consent) {
+    document.cookie = `${COOKIE_NAME}=${consent}; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=None; Secure`;
+}
+
+function deleteCookie() {
+    document.cookie = `${COOKIE_NAME}=; Max-Age=0`
+}
+
+inLoad.onTriggered = () => {
+    outLoaded.set(false);
+    outConsent.set(false);
+
+    if (!inGID.get()) {
+        console.error('Empty GA_MEASUREMENT_ID');
+        return;
+    }
+
+    loadScript(() => {
+        // console.log('Google Analytics loaded');
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = () => {window.dataLayer.push(arguments); }
+
+
+        window.gtag('js', new Date());
+        window.gtag('config', inGID.get());
+
+        const state = readAnalyticsCookieState();
+        // console.log('STATE:', state);
+        switch(state) {
+            case 'unset':
+                // doConsent();
+                // setAnalyticsCookie(true);
+                outShowBanner.set(true);
+                outConsent.set(false);
+                break;
+            case 'consent':
+                doConsent();
+                outConsent.set(true);
+                outShowBanner.set(false);
+                break;
+            case 'donotconsent':
+                doNotConsent();
+                // setAnalyticsCookie(false);
+                outConsent.set(false);
+                outShowBanner.set(false);
+                break;
+
+            default:
+                break;
+        }
+        outLoaded.set(true);
+        outTrigger.trigger();
+    });
+};
+
+inConsent.onTriggered = () => {
+    doConsent();
+    setAnalyticsCookie(true);
+    outConsent.set(true);
+    outShowBanner.set(false);
+}
+
+inRevokeConsent.onTriggered = () => {
+    doNotConsent()
+    setAnalyticsCookie(false);
+    outConsent.set(false);
+    outShowBanner.set(false);
+}
+
+inResetBanner.onTriggered = () => {
+    deleteCookie();
+    doConsent();
+    outConsent.set(true);
+    outShowBanner.set(true);
+}
+
+inDisableAnalytics.onTriggered = () => {
+    disableAnalytics();
+    deleteCookie();
+    outShowBanner.set(false);
+    outConsent.set(false);
+}
+
+
+};
+
+Ops.User.mick.GoogleAnalytics.prototype = new CABLES.Op();
+
 
 
 window.addEventListener('load', function(event) {
