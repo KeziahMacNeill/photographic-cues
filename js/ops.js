@@ -32829,6 +32829,7 @@ inRevokeConsent.onTriggered = () => {
 
 inResetBanner.onTriggered = () => {
     deleteCookie();
+    doNotConsent();
     disableAnalytics();
     outConsent.set(true);
     outShowBanner.set(true);
