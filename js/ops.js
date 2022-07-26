@@ -32710,6 +32710,7 @@ function loadScript(callback) {
 }
 
 function doNotConsent() {
+    console.log("doNotConsent triggered");
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
@@ -32722,6 +32723,7 @@ function doNotConsent() {
 }
 
 function doConsent() {
+    console.log("doConsent triggered");
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
