@@ -32727,34 +32727,34 @@ function doNotConsent() {
 }
 
 function doConsent() {
-    console.log("doConsent triggered");
+    // console.log("doConsent triggered");
 
-    outLoaded.set(false);
-    outConsent.set(false);
+    // outLoaded.set(false);
+    // outConsent.set(false);
 
-    if (!inGID.get()) {
-        console.error('Empty GA_MEASUREMENT_ID');
-        return;
-    }
+    // if (!inGID.get()) {
+    //     console.error('Empty GA_MEASUREMENT_ID');
+    //     return;
+    // }
 
-    loadScript(() => {
-        console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
-
-
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
-
-        const state = readAnalyticsCookieState();
-        console.log('STATE:', state);
-        outConsent.set(true);
-        outShowBanner.set(false);
-        outLoaded.set(true);
-        outTrigger.trigger();
-    });
+    // loadScript(() => {
+    //     console.log('Google Analytics loaded');
+    //     window.dataLayer = window.dataLayer || [];
+    //     window.gtag = () => {window.dataLayer.push(arguments); }
 
 
+    //     window.gtag('js', new Date());
+    //     window.gtag('config', inGID.get());
+
+    //     const state = readAnalyticsCookieState();
+    //     console.log('STATE:', state);
+    //     outConsent.set(true);
+    //     outShowBanner.set(false);
+    //     outLoaded.set(true);
+    //     outTrigger.trigger();
+    // });
+
+    console.log("do consent triggered");
 
 }
 
