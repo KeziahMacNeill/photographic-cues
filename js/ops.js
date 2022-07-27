@@ -32709,6 +32709,7 @@ function loadScript(callback) {
     script.onreadystatechange = callback;
     head.appendChild(script);
     script.onload = callback;
+    console.log(inGID.get());
     script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
 
 
