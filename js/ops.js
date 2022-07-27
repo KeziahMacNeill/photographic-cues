@@ -32706,11 +32706,12 @@ function loadScript(callback) {
     const script = document.createElement('script');
     script.type = "text/javascript";
     // script.setAttribute("async", "");
-    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
     script.onreadystatechange = callback;
-    script.onload = callback;
-
     head.appendChild(script);
+    script.onload = callback;
+    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
+
+
 }
 
 function doNotConsent() {
@@ -32736,11 +32737,10 @@ function doConsent() {
         console.error('Empty GA_MEASUREMENT_ID');
         return;
     }
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    } else {
+
+
+    loadScript(() => {
+        console.log('Google Analytics loaded');
         window.dataLayer = window.dataLayer || [];
         window.gtag = () => {window.dataLayer.push(arguments); }
 
@@ -32754,27 +32754,8 @@ function doConsent() {
         outShowBanner.set(false);
         outLoaded.set(true);
         outTrigger.trigger();
-    }
+    });
 
-
-    // loadScript(() => {
-    //     console.log('Google Analytics loaded');
-    //     window.dataLayer = window.dataLayer || [];
-    //     window.gtag = () => {window.dataLayer.push(arguments); }
-
-
-    //     window.gtag('js', new Date());
-    //     window.gtag('config', inGID.get());
-
-    //     const state = readAnalyticsCookieState();
-    //     console.log('STATE:', state);
-    //     outConsent.set(true);
-    //     outShowBanner.set(false);
-    //     outLoaded.set(true);
-    //     outTrigger.trigger();
-    // });
-
-    // console.log("do consent triggered");
 
 }
 
