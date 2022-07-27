@@ -32701,6 +32701,7 @@ const COOKIE_NAME = "cables_google_analytics_consent";
 outShowBanner.set(true);
 
 function loadScript(callback) {
+    console.log("loadScript triggered");
     const head = document.head;
     const script = document.createElement('script');
     script.type = "text/javascript";
@@ -32737,26 +32738,20 @@ function doConsent() {
     }
 
     loadScript(() => {
-        if (!window.hasOwnProperty('gtag')) {
-            console.error('Load Google Analytics first');
-            outConsent.set(false);
-            return;
-        } else {
-            console.log('Google Analytics loaded');
-            window.dataLayer = window.dataLayer || [];
-            window.gtag = () => {window.dataLayer.push(arguments); }
+        console.log('Google Analytics loaded');
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = () => {window.dataLayer.push(arguments); }
 
 
-            window.gtag('js', new Date());
-            window.gtag('config', inGID.get());
+        window.gtag('js', new Date());
+        window.gtag('config', inGID.get());
 
-            const state = readAnalyticsCookieState();
-            console.log('STATE:', state);
-            outConsent.set(true);
-            outShowBanner.set(false);
-            outLoaded.set(true);
-            outTrigger.trigger();
-        }
+        const state = readAnalyticsCookieState();
+        console.log('STATE:', state);
+        outConsent.set(true);
+        outShowBanner.set(false);
+        outLoaded.set(true);
+        outTrigger.trigger();
     });
 
 
