@@ -32725,6 +32725,26 @@ function doNotConsent() {
     });
 }
 
+function doConsentAlt() {
+    var gaProperty = 'G-BN6MWZLF32';
+
+	(function (i, s, o, g, r, a, m) {
+		i['GoogleAnalyticsObject'] = r;
+		i[r] = i[r] || function () {
+			(i[r].q = i[r].q || []).push(arguments)
+		}, i[r].l = 1 * new Date();
+		a = s.createElement(o),
+			m = s.getElementsByTagName(o)[0];
+		a.async = 1;
+		a.src = g;
+		m.parentNode.insertBefore(a, m)
+	})(window, document, 'script', '//www.googletagmanager.com/gtag/js', 'ga');
+
+	ga('create', gaProperty, 'auto');
+	ga('set', 'anonymizeIp', true);
+	ga('send', 'pageview');
+}
+
 function doConsent() {
     console.log("doConsent triggered");
 
@@ -32847,7 +32867,7 @@ inLoad.onTriggered = () => {
 };
 
 inConsent.onTriggered = () => {
-    doConsent();
+    doConsentAlt();
     setAnalyticsCookie(true);
     outConsent.set(true);
     outShowBanner.set(false);
