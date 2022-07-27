@@ -32736,9 +32736,11 @@ function doConsent() {
         console.error('Empty GA_MEASUREMENT_ID');
         return;
     }
-
-    loadScript(() => {
-        console.log('Google Analytics loaded');
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
+        return;
+    } else {
         window.dataLayer = window.dataLayer || [];
         window.gtag = () => {window.dataLayer.push(arguments); }
 
@@ -32746,18 +32748,31 @@ function doConsent() {
         window.gtag('js', new Date());
         window.gtag('config', inGID.get());
 
-        window.gtag('config', inGID.get(), {
-            page_title : 'Homepage',
-            page_location: 'https://photographic-cues.keiahmacneill.com' // The full URL is required.
-        });
-
         const state = readAnalyticsCookieState();
         console.log('STATE:', state);
         outConsent.set(true);
         outShowBanner.set(false);
         outLoaded.set(true);
         outTrigger.trigger();
-    });
+    }
+
+
+    // loadScript(() => {
+    //     console.log('Google Analytics loaded');
+    //     window.dataLayer = window.dataLayer || [];
+    //     window.gtag = () => {window.dataLayer.push(arguments); }
+
+
+    //     window.gtag('js', new Date());
+    //     window.gtag('config', inGID.get());
+
+    //     const state = readAnalyticsCookieState();
+    //     console.log('STATE:', state);
+    //     outConsent.set(true);
+    //     outShowBanner.set(false);
+    //     outLoaded.set(true);
+    //     outTrigger.trigger();
+    // });
 
     // console.log("do consent triggered");
 
