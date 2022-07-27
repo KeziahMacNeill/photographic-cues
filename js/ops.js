@@ -32737,32 +32737,34 @@ function doConsent() {
     }
 
     loadScript(() => {
-        console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
+        if (!window.hasOwnProperty('gtag')) {
+            console.error('Load Google Analytics first');
+            outConsent.set(false);
+            return;
+        } else {
+            console.log('Google Analytics loaded');
+            window.dataLayer = window.dataLayer || [];
+            window.gtag = () => {window.dataLayer.push(arguments); }
 
 
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
+            window.gtag('js', new Date());
+            window.gtag('config', inGID.get());
 
-        window.gtag('consent', 'update', {
-          'ad_storage': 'granted',
-          'analytics_storage': 'granted'
-        });
+            window.gtag('consent', 'update', {
+              'ad_storage': 'granted',
+              'analytics_storage': 'granted'
+            });
 
-        const state = readAnalyticsCookieState();
-        console.log('STATE:', state);
-        outConsent.set(true);
-        outShowBanner.set(false);
-        outLoaded.set(true);
-        outTrigger.trigger();
+            const state = readAnalyticsCookieState();
+            console.log('STATE:', state);
+            outConsent.set(true);
+            outShowBanner.set(false);
+            outLoaded.set(true);
+            outTrigger.trigger();
+        }
     });
 
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    }
+
 
 }
 
