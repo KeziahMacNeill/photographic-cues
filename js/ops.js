@@ -32697,26 +32697,17 @@ const outShowBanner = op.outBool('Show banner');
 
 const COOKIE_NAME = "cables_google_analytics_consent";
 
-
-outShowBanner.set(true);
-
 function loadScript(callback) {
-    console.log("loadScript triggered");
     const head = document.head;
     const script = document.createElement('script');
-    script.type = "text/javascript";
-    // script.setAttribute("async", "");
-    script.onreadystatechange = callback;
-    head.appendChild(script);
+    script.async = true;
     script.onload = callback;
-    console.log(inGID.get());
     script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
 
-
+    head.appendChild(script);
 }
 
 function doNotConsent() {
-    console.log("doNotConsent triggered");
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
@@ -32729,44 +32720,15 @@ function doNotConsent() {
 }
 
 function doConsent() {
-    console.log("doConsent triggered");
-
-    outLoaded.set(false);
-    outConsent.set(false);
-
-    if (!inGID.get()) {
-        console.error('Empty GA_MEASUREMENT_ID');
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
         return;
     }
-
-    var _gaq = _gaq || [];
-  _gaq.push(['_setAccount', inGID.get()]);
-  _gaq.push(['_trackPageview']);
-
-  (function() {
-    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
-    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
-    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
-    })();
-
-    // loadScript(() => {
-    //     console.log('Google Analytics loaded');
-    //     window.dataLayer = window.dataLayer || [];
-    //     window.gtag = () => {window.dataLayer.push(arguments); }
-
-
-    //     window.gtag('js', new Date());
-    //     window.gtag('config', inGID.get());
-
-    //     const state = readAnalyticsCookieState();
-    //     console.log('STATE:', state);
-    //     outConsent.set(true);
-    //     outShowBanner.set(false);
-    //     outLoaded.set(true);
-    //     outTrigger.trigger();
-    // });
-
-
+    window.gtag('consent', 'update', {
+      'ad_storage': 'granted',
+      'analytics_storage': 'granted'
+    });
 }
 
 function disableAnalytics() {
@@ -32798,8 +32760,19 @@ function deleteCookie() {
     document.cookie = `${COOKIE_NAME}=; Max-Age=0`
 }
 
+
+function activateGtm(w,d,s,l,i, callback) {
+    w[l] = w[l] || [];
+    w[l].push({'gtm.start': new Date().getTime(), event:'gtm.js'});
+    let f = d.getElementsByTagName(s)[0],
+    j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : '';
+    j.async = true;
+    j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+    f.parentNode.insertBefore(j,f);
+    j.onload = callback;
+}
+
 inLoad.onTriggered = () => {
-    /*
     outLoaded.set(false);
     outConsent.set(false);
 
@@ -32808,17 +32781,16 @@ inLoad.onTriggered = () => {
         return;
     }
 
-    loadScript(() => {
+    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
         console.log('Google Analytics loaded');
         window.dataLayer = window.dataLayer || [];
         window.gtag = () => {window.dataLayer.push(arguments); }
-
 
         window.gtag('js', new Date());
         window.gtag('config', inGID.get());
 
         const state = readAnalyticsCookieState();
-        console.log('STATE:', state);
+        // console.log('STATE:', state);
         switch(state) {
             case 'unset':
                 // doConsent();
@@ -32844,7 +32816,6 @@ inLoad.onTriggered = () => {
         outLoaded.set(true);
         outTrigger.trigger();
     });
-    */
 };
 
 inConsent.onTriggered = () => {
@@ -32863,8 +32834,7 @@ inRevokeConsent.onTriggered = () => {
 
 inResetBanner.onTriggered = () => {
     deleteCookie();
-    doNotConsent();
-    disableAnalytics();
+    doConsent();
     outConsent.set(true);
     outShowBanner.set(true);
 }
