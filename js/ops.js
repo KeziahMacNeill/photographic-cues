@@ -32698,6 +32698,7 @@ const outShowBanner = op.outBool('Show banner');
 const COOKIE_NAME = "cables_google_analytics_consent";
 
 function loadScript(callback) {
+    console.log("loadScript");
     const head = document.head;
     const script = document.createElement('script');
     script.async = true;
@@ -32708,6 +32709,7 @@ function loadScript(callback) {
 }
 
 function doNotConsent() {
+    console.log("doNotConsent");
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
@@ -32720,6 +32722,7 @@ function doNotConsent() {
 }
 
 function doConsent() {
+    console.log("doConsent");
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
@@ -32738,6 +32741,7 @@ function disableAnalytics() {
 
 
 function readAnalyticsCookieState() {
+    console.log("readAnalyticsCookieState");
     const toks = document.cookie.split('; ');
 
     if (!toks.find(row => row.startsWith(COOKIE_NAME)))
@@ -32753,15 +32757,18 @@ function readAnalyticsCookieState() {
 }
 
 function setAnalyticsCookie(consent) {
+    console.log("setAnalyticsCookie");
     document.cookie = `${COOKIE_NAME}=${consent}; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=None; Secure`;
 }
 
 function deleteCookie() {
+    console.log("deleteCookie");
     document.cookie = `${COOKIE_NAME}=; Max-Age=0`
 }
 
 
 function activateGtm(w,d,s,l,i, callback) {
+    console.log("activateGtm");
     w[l] = w[l] || [];
     w[l].push({'gtm.start': new Date().getTime(), event:'gtm.js'});
     let f = d.getElementsByTagName(s)[0],
@@ -32773,6 +32780,7 @@ function activateGtm(w,d,s,l,i, callback) {
 }
 
 inLoad.onTriggered = () => {
+    console.log("inLoad triggered");
     outLoaded.set(false);
     outConsent.set(false);
 
