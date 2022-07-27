@@ -32739,23 +32739,32 @@ function doConsent() {
         return;
     }
 
+    var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', inGID.get()]);
+  _gaq.push(['_trackPageview']);
 
-    loadScript(() => {
-        console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+
+    // loadScript(() => {
+    //     console.log('Google Analytics loaded');
+    //     window.dataLayer = window.dataLayer || [];
+    //     window.gtag = () => {window.dataLayer.push(arguments); }
 
 
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
+    //     window.gtag('js', new Date());
+    //     window.gtag('config', inGID.get());
 
-        const state = readAnalyticsCookieState();
-        console.log('STATE:', state);
-        outConsent.set(true);
-        outShowBanner.set(false);
-        outLoaded.set(true);
-        outTrigger.trigger();
-    });
+    //     const state = readAnalyticsCookieState();
+    //     console.log('STATE:', state);
+    //     outConsent.set(true);
+    //     outShowBanner.set(false);
+    //     outLoaded.set(true);
+    //     outTrigger.trigger();
+    // });
 
 
 }
