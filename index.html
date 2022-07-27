@@ -17,20 +17,6 @@
     <meta property="og:title" contents="PHOTOGRAPHIC CUES by Keziah Macneill" />
     <meta property="og:url" contents="https://photogrphic-cues.keziahmacneill.com" />
     <meta property="og:image" content="/assets/preview-image.png" />
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-BN6MWZLF32"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-
-        gtag('config', 'G-BN6MWZLF32');
-        
-        window.gtag('consent', 'default', {
-        'ad_storage': 'denied',
-        'analytics_storage': 'denied'
-        });
-    </script>
-
     <style>
         body {
             margin: 0;
@@ -125,6 +111,29 @@
             });
         });
     </script>
+
+<script src="https://cdn.jsdelivr.net/npm/cookieconsent@3/build/cookieconsent.min.js" data-cfasync="false"></script>
+<script src="js/vendor--cookieconsent.js"></script>
+<script>
+window.cookieconsent.initialise({
+  "palette": {
+    "popup": {
+      "background": "#454545",
+      "text": "#ffffff"
+    },
+    "button": {
+      "background": "#ffffff",
+      "text": "#000000"
+    }
+  },
+  "type": "opt-in",
+  "content": {
+    "message": "For research purposes we use cookies to better understand our audience. Do you accept?",
+    "allow": "Allow",
+    "href": "www.myimprint.com"
+  }
+});
+</script>
 </body>
 
 </html>
