@@ -40,6 +40,7 @@
 * __gallery_overview_camera_pos_Y__ ```Number```
 * __gallery_overview_camera_pos_Z__ ```Number```
 * __gallery_width__ ```Number```
+* __goto_idle_mode_time__ ```Number```
 * __grass_asset_model__ ```Number```
 * __grass_seed__ ```Number```
 * __has_hit__ ```Number```
@@ -47,7 +48,12 @@
 * __hit_x__ ```Number```
 * __hit_y__ ```Number```
 * __hit_z__ ```Number```
+* __idle_time__ ```Number```
+* __installation_index_incrementor__ ```Number```
+* __installation_input_x__ ```Number```
+* __installation_input_y__ ```Number```
 * __is_hit_body_string_valid__ ```Number```
+* __is_idle_mode__ ```Number```
 * __is_mobile__ ```Number```
 * __lake_displacement_amount__ ```Number```
 * __lake_displacement_noise_texture_scale__ ```Number```
@@ -57,14 +63,13 @@
 * __lake_geometry_bounding_minY__ ```Number```
 * __lake_size__ ```Number```
 * __loading_ani_normalized__ ```Number```
-* __moon_texture__ ```Texture```
 * __mountain_displacement_amount__ ```Number```
 * __mouse3D_x__ ```Number```
 * __mouse3D_y__ ```Number```
 * __postpro_hue_offset__ ```Number```
 * __postpro_noise_amount__ ```Number```
 * __quality_button_hover__ ```Number```
-* __render_performance_setting__ ```Number```
+* __render_performance_setting__ ```Number``` (default Value: `0`)
 * __render_performance_setting__ ```Number```
 * __Ripples_Texture_Size__ ```Number```
 * __scene_0_cam_rot_x__ ```Number```
@@ -101,4 +106,5 @@
 * __tutorial_transition__ ```Number```
 * __water_data_offset__ ```Number```
 * __water_level__ ```Number```
+* __web_mode__ ```Number```
 

@@ -9,6 +9,7 @@ Ops.Ui=Ops.Ui || {};
 Ops.Anim=Ops.Anim || {};
 Ops.Html=Ops.Html || {};
 Ops.Json=Ops.Json || {};
+Ops.Libs=Ops.Libs || {};
 Ops.Math=Ops.Math || {};
 Ops.Time=Ops.Time || {};
 Ops.User=Ops.User || {};
@@ -39,6 +40,7 @@ Ops.Gl.Geometry=Ops.Gl.Geometry || {};
 Ops.Gl.Textures=Ops.Gl.Textures || {};
 Ops.Math.Compare=Ops.Math.Compare || {};
 Ops.Devices.Mouse=Ops.Devices.Mouse || {};
+Ops.Libs.Mediapipe=Ops.Libs.Mediapipe || {};
 Ops.Physics.Cannon=Ops.Physics.Cannon || {};
 Ops.Gl.ShaderEffects=Ops.Gl.ShaderEffects || {};
 Ops.Gl.TextureEffects=Ops.Gl.TextureEffects || {};
@@ -386,224 +388,6 @@ function clean()
 
 Ops.Sequence.prototype = new CABLES.Op();
 CABLES.OPS["a466bc1f-06e9-4595-8849-bffb9fe22f99"]={f:Ops.Sequence,objName:"Ops.Sequence"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.ImageCompose_v2
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.ImageCompose_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"imgcomp_frag":"UNI float a;\nvoid main()\n{\n   outColor= vec4(0.0,0.0,0.0,a);\n}\n",};
-const
-    render = op.inTrigger("Render"),
-    useVPSize = op.inBool("Use viewport size", true),
-    width = op.inValueInt("Width", 640),
-    height = op.inValueInt("Height", 480),
-    tfilter = op.inSwitch("Filter", ["nearest", "linear", "mipmap"], "linear"),
-    twrap = op.inValueSelect("Wrap", ["clamp to edge", "repeat", "mirrored repeat"], "repeat"),
-    fpTexture = op.inValueBool("HDR"),
-    inTransp = op.inValueBool("Transparent", false),
-
-    trigger = op.outTrigger("Next"),
-    texOut = op.outTexture("texture_out"),
-    outRatio = op.outValue("Aspect Ratio");
-
-const cgl = op.patch.cgl;
-op.setPortGroup("Texture Size", [useVPSize, width, height]);
-op.setPortGroup("Texture Settings", [twrap, tfilter, fpTexture, inTransp]);
-
-texOut.set(CGL.Texture.getEmptyTexture(cgl, fpTexture.get()));
-let effect = null;
-let tex = null;
-let w = 8, h = 8;
-
-const prevViewPort = [0, 0, 0, 0];
-let reInitEffect = true;
-
-// const bgShader = new CGL.Shader(cgl, "imgcompose bg");
-// bgShader.setSource(bgShader.getDefaultVertexShader(), attachments.imgcomp_frag);
-
-// const uniAlpha = new CGL.Uniform(bgShader, "f", "a", !inTransp.get());
-
-let selectedFilter = CGL.Texture.FILTER_LINEAR;
-let selectedWrap = CGL.Texture.WRAP_CLAMP_TO_EDGE;
-
-const fps = 0;
-const fpsStart = 0;
-
-twrap.onChange = onWrapChange;
-tfilter.onChange = onFilterChange;
-
-render.onTriggered = op.preRender = doRender;
-
-onFilterChange();
-onWrapChange();
-updateSizePorts();
-
-// inTransp.onChange = () =>
-// {
-//     uniAlpha.setValue(!inTransp.get());
-// };
-
-function initEffect()
-{
-    if (effect)effect.delete();
-    if (tex)tex.delete();
-
-    if (fpTexture.get() && tfilter.get() == "mipmap") op.setUiError("fpmipmap", "Don't use mipmap and HDR at the same time, many systems do not support this.");
-    else op.setUiError("fpmipmap", null);
-
-    effect = new CGL.TextureEffect(cgl, { "isFloatingPointTexture": fpTexture.get() });
-
-    tex = new CGL.Texture(cgl,
-        {
-            "name": "image_compose_v2_" + op.id,
-            "isFloatingPointTexture": fpTexture.get(),
-            "filter": selectedFilter,
-            "wrap": selectedWrap,
-            "width": Math.ceil(width.get()),
-            "height": Math.ceil(height.get()),
-        });
-
-    effect.setSourceTexture(tex);
-    texOut.set(CGL.Texture.getEmptyTexture(cgl, fpTexture.get()));
-
-    reInitEffect = false;
-}
-
-fpTexture.onChange = function ()
-{
-    reInitEffect = true;
-};
-
-function updateResolution()
-{
-    if (!effect)initEffect();
-
-    if (useVPSize.get())
-    {
-        w = cgl.getViewPort()[2];
-        h = cgl.getViewPort()[3];
-    }
-    else
-    {
-        w = Math.ceil(width.get());
-        h = Math.ceil(height.get());
-    }
-
-    outRatio.set(w / h);
-
-    if ((w != tex.width || h != tex.height) && (w !== 0 && h !== 0))
-    {
-        // height.set(h);
-        // width.set(w);
-        tex.setSize(w, h);
-
-        effect.setSourceTexture(tex);
-        texOut.set(CGL.Texture.getEmptyTexture(cgl, fpTexture.get()));
-        texOut.set(tex);
-    }
-
-    // if (texOut.get() && selectedFilter != CGL.Texture.FILTER_NEAREST)
-    // {
-    //     if (!texOut.get().isPowerOfTwo()) op.setUiError("hintnpot", "texture dimensions not power of two! - texture filtering when scaling will not work on ios devices.", 0);
-    //     else op.setUiError("hintnpot", null, 0);
-    // }
-    // else op.setUiError("hintnpot", null, 0);
-}
-
-function updateSizePorts()
-{
-    width.setUiAttribs({ "greyout": useVPSize.get() });
-    height.setUiAttribs({ "greyout": useVPSize.get() });
-}
-
-useVPSize.onChange = function ()
-{
-    updateSizePorts();
-};
-
-op.preRender = function ()
-{
-    doRender();
-    // bgShader.bind();
-};
-
-function doRender()
-{
-    if (!effect || reInitEffect) initEffect();
-
-    const vp = cgl.getViewPort();
-    prevViewPort[0] = vp[0];
-    prevViewPort[1] = vp[1];
-    prevViewPort[2] = vp[2];
-    prevViewPort[3] = vp[3];
-
-    cgl.pushBlend(false);
-
-    updateResolution();
-
-    const oldEffect = cgl.currentTextureEffect;
-    cgl.currentTextureEffect = effect;
-    cgl.currentTextureEffect.width = width.get();
-    cgl.currentTextureEffect.height = height.get();
-    effect.setSourceTexture(tex);
-
-    let bgTex = CGL.Texture.getBlackTexture(cgl);
-    if (inTransp.get())bgTex = CGL.Texture.getEmptyTexture(cgl, fpTexture.get());
-
-    effect.startEffect(bgTex);
-
-    // cgl.pushShader(bgShader);
-    // cgl.currentTextureEffect.bind();
-    // cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-    // cgl.currentTextureEffect.finish();
-    // cgl.popShader();
-
-    trigger.trigger();
-
-    texOut.set(effect.getCurrentSourceTexture());
-
-    effect.endEffect();
-
-    cgl.setViewPort(prevViewPort[0], prevViewPort[1], prevViewPort[2], prevViewPort[3]);
-
-    cgl.popBlend(false);
-    cgl.currentTextureEffect = oldEffect;
-}
-
-function onWrapChange()
-{
-    if (twrap.get() == "repeat") selectedWrap = CGL.Texture.WRAP_REPEAT;
-    if (twrap.get() == "mirrored repeat") selectedWrap = CGL.Texture.WRAP_MIRRORED_REPEAT;
-    if (twrap.get() == "clamp to edge") selectedWrap = CGL.Texture.WRAP_CLAMP_TO_EDGE;
-
-    reInitEffect = true;
-    // updateResolution();
-}
-
-function onFilterChange()
-{
-    if (tfilter.get() == "nearest") selectedFilter = CGL.Texture.FILTER_NEAREST;
-    if (tfilter.get() == "linear") selectedFilter = CGL.Texture.FILTER_LINEAR;
-    if (tfilter.get() == "mipmap") selectedFilter = CGL.Texture.FILTER_MIPMAP;
-
-    reInitEffect = true;
-    // updateResolution();
-}
-
-
-};
-
-Ops.Gl.TextureEffects.ImageCompose_v2.prototype = new CABLES.Op();
-CABLES.OPS["a5b43d4c-a9ea-4eaf-9ed0-f257d222659d"]={f:Ops.Gl.TextureEffects.ImageCompose_v2,objName:"Ops.Gl.TextureEffects.ImageCompose_v2"};
 
 
 
@@ -1162,84 +946,6 @@ CABLES.OPS["8f6b2f15-fcb0-4597-90c0-e5173f2969fe"]={f:Ops.Gl.TextureEffects.Draw
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.Color
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.Color = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"color_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float r;\nUNI float g;\nUNI float b;\nUNI float amount;\n\n#ifdef MASK\n    UNI sampler2D mask;\n#endif\n\n{{CGL.BLENDMODES}}\n\nvoid main()\n{\n    vec4 col=vec4(r,g,b,1.0);\n    vec4 base=texture(tex,texCoord);\n\n    float am=amount;\n    #ifdef MASK\n        float msk=texture(mask,texCoord).r;\n        #ifdef INVERTMASK\n            msk=1.0-msk;\n        #endif\n        am*=1.0-msk;\n    #endif\n\n    outColor= cgl_blend(base,col,am);\n    outColor.a*=base.a;\n}\n",};
-const
-    render = op.inTrigger("render"),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op),
-    amount = op.inValueSlider("Amount", 1),
-
-    inMask = op.inTexture("Mask"),
-    inMaskInvert = op.inValueBool("Mask Invert"),
-    r = op.inValueSlider("r", Math.random()),
-    g = op.inValueSlider("g", Math.random()),
-    b = op.inValueSlider("b", Math.random()),
-    trigger = op.outTrigger("trigger");
-
-r.setUiAttribs({ "colorPick": true });
-op.setPortGroup("Color", [r, g, b]);
-
-const TEX_SLOT = 0;
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, "textureeffect color");
-const srcFrag = attachments.color_frag || "";
-shader.setSource(shader.getDefaultVertexShader(), srcFrag);
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", TEX_SLOT),
-    makstextureUniform = new CGL.Uniform(shader, "t", "mask", 1),
-    uniformR = new CGL.Uniform(shader, "f", "r", r),
-    uniformG = new CGL.Uniform(shader, "f", "g", g),
-    uniformB = new CGL.Uniform(shader, "f", "b", b),
-    uniformAmount = new CGL.Uniform(shader, "f", "amount", amount);
-
-inMask.onChange = function ()
-{
-    if (inMask.get())shader.define("MASK");
-    else shader.removeDefine("MASK");
-};
-
-inMaskInvert.onChange = function ()
-{
-    if (inMaskInvert.get())shader.define("INVERTMASK");
-    else shader.removeDefine("INVERTMASK");
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(TEX_SLOT, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-    if (inMask.get()) cgl.setTexture(1, inMask.get().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.Color.prototype = new CABLES.Op();
-CABLES.OPS["c0acfc80-16f9-4f17-978d-bad650f3ed1c"]={f:Ops.Gl.TextureEffects.Color,objName:"Ops.Gl.TextureEffects.Color"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.TextureEffects.PixelDifference
 // 
 // **************************************************************
@@ -1367,105 +1073,6 @@ CABLES.OPS["f4e53fd9-d4c3-4d0e-839a-78543c38b8db"]={f:Ops.Gl.TextureEffects.Pixe
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.PixelDisplacement_v3
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.PixelDisplacement_v3 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"pixeldisplace3_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI sampler2D displaceTex;\nUNI float amountX;\nUNI float amountY;\nUNI float amount;\n\n{{CGL.BLENDMODES}}\n\nvec3 getOffset(vec3 offset)\n{\n    #ifdef ZERO_BLACK\n        return offset;\n    #endif\n\n    #ifdef ZERO_GREY\n        return offset*2.0-1.0;\n    #endif\n}\n\nfloat getOffset(float offset)\n{\n    #ifdef ZERO_BLACK\n        return offset;\n    #endif\n\n    #ifdef ZERO_GREY\n        return offset*2.0-1.0;\n    #endif\n}\n\nvoid main()\n{\n    vec3 offset=texture(displaceTex,texCoord).rgb;\n    float x,y;\n\n    #ifdef INPUT_REDGREEN\n        offset=getOffset(offset);\n        x=offset.r*amountX+texCoord.x;\n        y=offset.g*amountY+texCoord.y;\n    #endif\n    #ifdef INPUT_RED\n        offset=getOffset(offset);\n        x=offset.r*amountX+texCoord.x;\n        y=offset.r*amountY+texCoord.y;\n    #endif\n    #ifdef INPUT_GREEN\n        offset=getOffset(offset);\n        x=offset.g*amountX+texCoord.x;\n        y=offset.g*amountY+texCoord.y;\n    #endif\n    #ifdef INPUT_BLUE\n        offset=getOffset(offset);\n        x=offset.b*amountX+texCoord.x;\n        y=offset.b*amountY+texCoord.y;\n    #endif\n    #ifdef INPUT_LUMINANCE\n        float o=dot(vec3(0.2126,0.7152,0.0722), offset);\n        o=getOffset(o);\n        x=o*amountX+texCoord.x;\n        y=o*amountY+texCoord.y;\n    #endif\n    #ifdef WRAP_CLAMP\n        x=clamp(x,0.0,1.0);\n        y=clamp(y,0.0,1.0);\n    #endif\n    #ifdef WRAP_REPEAT\n        x=mod(x,1.0);\n        y=mod(y,1.0);\n    #endif\n    #ifdef WRAP_MIRROR\n        float mx=mod(x,2.0);\n        float my=mod(y,2.0);\n        x=abs((floor(mx)-fract(mx)));\n        y=abs((floor(my)-fract(my)));\n    #endif\n\n\n\n    vec4 col=texture(tex,vec2(x,y));\n    vec4 base=texture(tex,texCoord);\n\n    outColor=cgl_blend(base,col,amount);\n}",};
-const
-    render = op.inTrigger("render"),
-    displaceTex = op.inTexture("displaceTex"),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    amount = op.inValueSlider("Amount", 1),
-    amountX = op.inValueSlider("amount X", 0.2),
-    amountY = op.inValueSlider("amount Y", 0.2),
-    inWrap = op.inSwitch("Wrap", ["Mirror", "Clamp", "Repeat"], "Mirror"),
-    inInput = op.inValueSelect("Input", ["Luminance", "RedGreen", "Red", "Green", "Blue"], "Luminance"),
-    inZero = op.inSwitch("Zero Displace", ["Grey", "Black"], "Grey"),
-    // displaceTex=op.inTexture("displaceTex"),
-    trigger = op.outTrigger("trigger");
-
-op.setPortGroup("Axis Displacement Strength", [amountX, amountY]);
-op.setPortGroup("Modes", [inWrap, inInput]);
-op.toWorkPortsNeedToBeLinked(displaceTex);
-
-const
-    cgl = op.patch.cgl,
-    shader = new CGL.Shader(cgl, op.name);
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.pixeldisplace3_frag);
-
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    textureDisplaceUniform = new CGL.Uniform(shader, "t", "displaceTex", 1),
-    amountXUniform = new CGL.Uniform(shader, "f", "amountX", amountX),
-    amountYUniform = new CGL.Uniform(shader, "f", "amountY", amountY),
-    amountUniform = new CGL.Uniform(shader, "f", "amount", amount);
-
-inZero.onChange = updateZero;
-inWrap.onChange = updateWrap;
-inInput.onChange = updateInput;
-
-updateWrap();
-updateInput();
-updateZero();
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-function updateZero()
-{
-    shader.removeDefine("ZERO_BLACK");
-    shader.removeDefine("ZERO_GREY");
-    shader.define("ZERO_" + (inZero.get() + "").toUpperCase());
-}
-
-function updateWrap()
-{
-    shader.removeDefine("WRAP_CLAMP");
-    shader.removeDefine("WRAP_REPEAT");
-    shader.removeDefine("WRAP_MIRROR");
-    shader.define("WRAP_" + (inWrap.get() + "").toUpperCase());
-}
-
-function updateInput()
-{
-    shader.removeDefine("INPUT_LUMINANCE");
-    shader.removeDefine("INPUT_REDGREEN");
-    shader.removeDefine("INPUT_RED");
-    shader.define("INPUT_" + (inInput.get() + "").toUpperCase());
-}
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-    if (displaceTex.get()) cgl.setTexture(1, displaceTex.get().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.PixelDisplacement_v3.prototype = new CABLES.Op();
-CABLES.OPS["c089646e-9324-48b2-8b32-81240408222e"]={f:Ops.Gl.TextureEffects.PixelDisplacement_v3,objName:"Ops.Gl.TextureEffects.PixelDisplacement_v3"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Value.Number
 // 
 // **************************************************************
@@ -1491,65 +1098,6 @@ function exec()
 
 Ops.Value.Number.prototype = new CABLES.Op();
 CABLES.OPS["8fb2bb5d-665a-4d0a-8079-12710ae453be"]={f:Ops.Value.Number,objName:"Ops.Value.Number"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.Levels
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.Levels = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"levels_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float inMin;\nUNI float inMax;\nUNI float midPoint;\nUNI float outMax;\nUNI float outMin;\n\nvoid main()\n{\n    vec3 base=texture(tex,texCoord).rgb;\n    vec3 inputRange = min(max(base - vec3(inMin), vec3(0.0)) / (vec3(inMax) - vec3(inMin)), vec3(outMax));\n\n    inputRange = pow(inputRange, vec3(1.0 / (1.5 - midPoint)));\n\n    outColor.a=1.0;\n    outColor.rgb= mix(vec3(outMin), vec3(1.0), inputRange);\n}",};
-let render = op.inTrigger("Render");
-
-let inMin = op.inValueSlider("In Min", 0);
-let inMid = op.inValueSlider("Midpoint", 0.5);
-let inMax = op.inValueSlider("In Max", 1);
-
-let outMin = op.inValueSlider("Out Min", 0);
-let outMax = op.inValueSlider("Out Max", 1);
-
-let trigger = op.addOutPort(new CABLES.Port(op, "Next", CABLES.OP_PORT_TYPE_FUNCTION));
-
-let cgl = op.patch.cgl;
-let shader = new CGL.Shader(cgl, op.name);
-
-let uniInMin = new CGL.Uniform(shader, "f", "inMin", inMin);
-let uniInMid = new CGL.Uniform(shader, "f", "midPoint", inMid);
-let uniInMax = new CGL.Uniform(shader, "f", "inMax", inMax);
-
-let uniOutMin = new CGL.Uniform(shader, "f", "outMin", outMin);
-let uniOutMax = new CGL.Uniform(shader, "f", "outMax", outMax);
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.levels_frag);
-let textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.Levels.prototype = new CABLES.Op();
-CABLES.OPS["42ad6bbe-df17-48c7-89dd-bd7022113897"]={f:Ops.Gl.TextureEffects.Levels,objName:"Ops.Gl.TextureEffects.Levels"};
 
 
 
@@ -4129,160 +3677,6 @@ CABLES.OPS["790f3702-9833-464e-8e37-6f0f813f7e16"]={f:Ops.Gl.Texture_v2,objName:
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.Border
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.Border = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"border_frag":"IN vec2 texCoord;\nUNI float width;\nUNI sampler2D tex;\nUNI float amount;\nUNI float r;\nUNI float g;\nUNI float b;\nUNI float aspect;\nUNI vec4 mulSides;\nUNI bool smoothed;\n\n{{CGL.BLENDMODES}}\n\nvoid main()\n{\n    vec4 col= texture(tex,texCoord);\n\n    if(!smoothed)\n    {\n        float border=0.0;\n        if(border==0.0 && texCoord.y < width/aspect/3.0) border=mulSides.x;\n        if(border==0.0 && texCoord.y > 1.0-width/aspect/3.0) border=mulSides.z;\n        if(border==0.0 && texCoord.x > 1.0-width/3.0) border=mulSides.a;\n        if(border==0.0 && texCoord.x < width/3.0 ) border=mulSides.y;\n\n        col = vec4(r,g,b, border);\n    }\n    else\n    {\n       float f=smoothstep(0.0,width,texCoord.x)-smoothstep(1.0-width,1.0,texCoord.x);\n       f*=smoothstep(0.0,width/aspect,texCoord.y);\n       f*=smoothstep(1.0,1.0-width/aspect,texCoord.y);\n       col= mix(col,vec4(r,g,b, 1.0),1.0-f);\n    }\n\n\n    vec4 base=texture(tex,texCoord);\n    outColor=cgl_blend(base,col,amount*col.a);\n}",};
-const
-    render = op.inTrigger("render"),
-    width = op.inValue("width", 0.1),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    amount = op.inValueSlider("Amount", 1),
-    trigger = op.outTrigger("trigger"),
-    smooth = op.inValueBool("Smooth", false),
-    r = op.inValueSlider("r", Math.random()),
-    g = op.inValueSlider("g", Math.random()),
-    b = op.inValueSlider("b", Math.random()),
-
-    sideA = op.inFloat("Side A", 1),
-    sideB = op.inFloat("Side B", 1),
-    sideC = op.inFloat("Side C", 1),
-    sideD = op.inFloat("Side D", 1);
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, "border");
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.border_frag);
-
-const textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-const amountUniform = new CGL.Uniform(shader, "f", "amount", amount);
-const aspectUniform = new CGL.Uniform(shader, "f", "aspect", 0);
-const uniSmooth = new CGL.Uniform(shader, "b", "smoothed", smooth);
-const uniWidth = new CGL.Uniform(shader, "f", "width", width.get());
-
-width.onChange = function ()
-{
-    uniWidth.setValue(width.get() / 2);
-};
-
-r.setUiAttribs({ "colorPick": true });
-
-const unir = new CGL.Uniform(shader, "f", "r", r);
-const unig = new CGL.Uniform(shader, "f", "g", g);
-const unib = new CGL.Uniform(shader, "f", "b", b);
-
-shader.addUniformFrag("4f", "mulSides", sideA, sideB, sideC, sideD);
-
-op.setPortGroup("Sides", [sideA, sideB, sideC, sideD]);
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    let texture = cgl.currentTextureEffect.getCurrentSourceTexture();
-    aspectUniform.set(texture.height / texture.width);
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, texture.tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.Border.prototype = new CABLES.Op();
-CABLES.OPS["e6aae62c-1620-465d-94de-049148b530e6"]={f:Ops.Gl.TextureEffects.Border,objName:"Ops.Gl.TextureEffects.Border"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.EdgeDetection_v3
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.EdgeDetection_v3 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"edgedetect_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float amount;\nUNI float width;\nUNI float strength;\nUNI float texWidth;\nUNI float texHeight;\nUNI float mulColor;\n\nconst vec4 lumcoeff = vec4(0.299,0.587,0.114, 0.);\n\nvec3 desaturate(vec3 color)\n{\n    return vec3(dot(vec3(0.2126,0.7152,0.0722), color));\n}\n\n{{CGL.BLENDMODES}}\n\nvoid main()\n{\n    // vec4 col=vec4(1.0,0.0,0.0,1.0);\n\n    // float pixelX=0.27/texWidth;\n    // float pixelY=0.27/texHeight;\n    float pixelX=(width+0.01)*4.0/texWidth;\n    float pixelY=(width+0.01)*4.0/texHeight;\n\nvec2 tc=texCoord;\n// #ifdef OFFSETPIXEL\n    tc.x+=1.0/texWidth*0.5;\n    tc.y+=1.0/texHeight*0.5;\n// #endif\n    // col=texture(tex,texCoord);\n\n    float count=1.0;\n\n\tvec4 horizEdge = vec4( 0.0 );\n\thorizEdge -= texture( tex, vec2( tc.x - pixelX, tc.y - pixelY ) ) * 1.0;\n\thorizEdge -= texture( tex, vec2( tc.x - pixelX, tc.y     ) ) * 2.0;\n\thorizEdge -= texture( tex, vec2( tc.x - pixelX, tc.y + pixelY ) ) * 1.0;\n\thorizEdge += texture( tex, vec2( tc.x + pixelX, tc.y - pixelY ) ) * 1.0;\n\thorizEdge += texture( tex, vec2( tc.x + pixelX, tc.y     ) ) * 2.0;\n\thorizEdge += texture( tex, vec2( tc.x + pixelX, tc.y + pixelY ) ) * 1.0;\n\tvec4 vertEdge = vec4( 0.0 );\n\tvertEdge -= texture( tex, vec2( tc.x - pixelX, tc.y - pixelY ) ) * 1.0;\n\tvertEdge -= texture( tex, vec2( tc.x    , tc.y - pixelY ) ) * 2.0;\n\tvertEdge -= texture( tex, vec2( tc.x + pixelX, tc.y - pixelY ) ) * 1.0;\n\tvertEdge += texture( tex, vec2( tc.x - pixelX, tc.y + pixelY ) ) * 1.0;\n\tvertEdge += texture( tex, vec2( tc.x    , tc.y + pixelY ) ) * 2.0;\n\tvertEdge += texture( tex, vec2( tc.x + pixelX, tc.y + pixelY ) ) * 1.0;\n\n\n\tvec3 edge = sqrt((horizEdge.rgb/count * horizEdge.rgb/count) + (vertEdge.rgb/count * vertEdge.rgb/count));\n\n    edge=desaturate(edge);\n    edge*=strength;\n\n    if(mulColor>0.0) edge*=texture( tex, texCoord ).rgb*mulColor*4.0;\n    edge=max(min(edge,1.0),0.0);\n\n    //blend section\n    vec4 col=vec4(edge,1.0);\n    vec4 base=texture(tex,texCoord);\n\n    outColor=cgl_blend(base,col,amount);\n}\n\n",};
-const
-    render = op.inTrigger("Render"),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    amount = op.inValueSlider("Amount", 1),
-    strength = op.inFloat("Strength", 4.0),
-    width = op.inValueSlider("Width", 0.1),
-    mulColor = op.inValueSlider("Mul Color", 0),
-    // offsetPixel=op.inBool("Offset Pixel",false),
-    trigger = op.outTrigger("Trigger");
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, op.name);
-// offsetPixel.onChange=updateOffsetPixel;
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.edgedetect_frag);
-
-// updateOffsetPixel();
-
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
-    strengthUniform = new CGL.Uniform(shader, "f", "strength", strength),
-    widthUniform = new CGL.Uniform(shader, "f", "width", width),
-    uniWidth = new CGL.Uniform(shader, "f", "texWidth", 128),
-    uniHeight = new CGL.Uniform(shader, "f", "texHeight", 128),
-    uniMulColor = new CGL.Uniform(shader, "f", "mulColor", mulColor);
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-// function updateOffsetPixel()
-// {
-//     shader.toggleDefine('OFFSETPIXEL',offsetPixel.get());
-// }
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    uniWidth.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().width);
-    uniHeight.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().height);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.EdgeDetection_v3.prototype = new CABLES.Op();
-CABLES.OPS["3cdc351c-8d6e-4d3d-8da0-0777a6062c0d"]={f:Ops.Gl.TextureEffects.EdgeDetection_v3,objName:"Ops.Gl.TextureEffects.EdgeDetection_v3"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.Pbr.PbrMaterial
 // 
 // **************************************************************
@@ -5302,188 +4696,6 @@ CABLES.OPS["0b3e04f7-323e-4ac8-8a22-a21e2f36e0e9"]={f:Ops.Gl.Matrix.TransformVie
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.ScaleTexture
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.ScaleTexture = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"scale_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI sampler2D multiplierTex;\nUNI float amount;\nUNI float uScaleX,uScaleY;\nUNI float offsetX,offsetY;\nUNI float centerX,centerY;\n\n{{CGL.BLENDMODES}}\n\nvoid main()\n{\n    float multiplier = 1.0;\n    vec2 uv = texCoord;\n\n    #ifdef MASK_SCALE\n        multiplier = dot(vec3(0.2126,0.7152,0.0722), texture(multiplierTex,texCoord).rgb);\n    #endif\n\n    uv.x = (uv.x - centerX) / (uScaleX * multiplier)  + centerX+offsetX ;\n    uv.y = (uv.y - centerY) / (uScaleY * multiplier)  + centerY+offsetY ;\n\n\n\n\n    //blend section\n    vec4 col = texture(tex,uv);\n\n\n\n    //original texture\n    vec4 base = texture(tex,texCoord);\n\n    //blend stuff\n    float a=amount;\n\n\n    outColor=cgl_blend(base,col,a);\n\n    if(uv.x>1.0||uv.y>1.0||uv.x<0.0||uv.y<0.0)\n    {\n        outColor.a=0.0;\n        // a=0.0;\n    }\n\n}\n",};
-const
-    render = op.inTrigger("render"),
-    multiplierTex = op.inTexture("Multiplier"),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    amount = op.inValueSlider("Amount", 1),
-    scaleX = op.inValue("Scale X", 1.5),
-    scaleY = op.inValue("Scale Y", 1.5),
-    offsetX = op.inValueSlider("offset X", 0),
-    offsetY = op.inValueSlider("offset Y", 0),
-    centerX = op.inValueSlider("center X", 0.5),
-    centerY = op.inValueSlider("center Y", 0.5),
-    trigger = op.outTrigger("trigger");
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, op.name);
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.scale_frag);
-
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    textureMultiplierUniform = new CGL.Uniform(shader, "t", "multiplierTex", 1),
-    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
-    scaleXUniform = new CGL.Uniform(shader, "f", "uScaleX", scaleX),
-    scaleYUniform = new CGL.Uniform(shader, "f", "uScaleY", scaleY),
-    centerXUniform = new CGL.Uniform(shader, "f", "centerX", centerX),
-    centerYUniform = new CGL.Uniform(shader, "f", "centerY", centerY),
-    offsetXUniform = new CGL.Uniform(shader, "f", "offsetX", offsetX),
-    offsetYUniform = new CGL.Uniform(shader, "f", "offsetY", offsetY);
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-multiplierTex.onChange = function ()
-{
-    shader.toggleDefine("MASK_SCALE", multiplierTex.isLinked());
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    if (multiplierTex.get()) cgl.setTexture(1, multiplierTex.get().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.ScaleTexture.prototype = new CABLES.Op();
-CABLES.OPS["12cfa989-d575-4ee2-9deb-5392097c5a27"]={f:Ops.Gl.TextureEffects.ScaleTexture,objName:"Ops.Gl.TextureEffects.ScaleTexture"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.FastBlur
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.FastBlur = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"blur_frag":"\nUNI sampler2D tex;\n#ifdef USE_MASK\n    UNI sampler2D texMask;\n#endif\nUNI float amount;\nUNI float pass;\n\nIN vec2 texCoord;\n\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nIN vec2 coord0;\nIN vec2 coord1;\nIN vec2 coord2;\nIN vec2 coord3;\nIN vec2 coord4;\nIN vec2 coord5;\nIN vec2 coord6;\n\n#ifdef HAS_MASK\n    UNI sampler2D imageMask;\n#endif\n\nvoid main()\n{\n    vec4 color = vec4(0.0);\n\n    #ifdef USE_MASK\n        #ifdef MASK_INVERT\n            if(texture(texMask,texCoord).r<0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n\n        #ifndef MASK_INVERT\n            if(texture(texMask,texCoord).r>0.5)\n            {\n                outColor= texture(tex, texCoord);\n                return;\n            }\n        #endif\n    #endif\n\n    color += texture(tex, coord0) * 0.06927096443792478;\n    color += texture(tex, coord1) * 0.1383328848652136;\n    color += texture(tex, coord2) * 0.21920904690397863;\n    color += texture(tex, coord3) * 0.14637421;\n    color += texture(tex, coord4) * 0.21920904690397863;\n    color += texture(tex, coord5) * 0.1383328848652136;\n    color += texture(tex, coord6) * 0.06927096443795711;\n\n    color.a=1.0;\n    outColor= color;\n}","blur_vert":"\nIN vec3 vPosition;\nIN vec2 attrTexCoord;\nIN vec3 attrVertNormal;\nOUT vec2 texCoord;\nOUT vec3 norm;\nUNI mat4 projMatrix;\nUNI mat4 mvMatrix;\nUNI mat4 modelMatrix;\n\nUNI float pass;\nUNI float dirX;\nUNI float dirY;\nUNI float width;\nUNI float height;\n\nOUT vec2 coord0;\nOUT vec2 coord1;\nOUT vec2 coord2;\nOUT vec2 coord3;\nOUT vec2 coord4;\nOUT vec2 coord5;\nOUT vec2 coord6;\n\n// http://dev.theomader.com/gaussian-kernel-calculator/\n// http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/\n\n\nvoid main()\n{\n    texCoord=attrTexCoord;\n    norm=attrVertNormal;\n    vec4 pos=vec4(vPosition,  1.0);\n    {{MODULE_VERTEX_POSITION}}\n\n    vec2 dir=vec2(dirX,dirY);\n    vec2 res=vec2( (1.) / width , (1.) / height )*dir;\n\n    coord3= attrTexCoord;\n\n    coord0= attrTexCoord + (-3.0368997744118595 * res);\n    coord1= attrTexCoord + (-2.089778445362373 * res);\n    coord2= attrTexCoord + (-1.2004366090034069 * res);\n    coord4= attrTexCoord + (1.2004366090034069 * res);\n    coord5= attrTexCoord + (2.089778445362373* res);\n    coord6= attrTexCoord + (3.0368997744118595 * res);\n\n    #ifdef CLAMP\n        coord0=clamp(coord0,0.0,1.0);\n        coord1=clamp(coord1,0.0,1.0);\n        coord2=clamp(coord2,0.0,1.0);\n        coord3=clamp(coord3,0.0,1.0);\n        coord4=clamp(coord4,0.0,1.0);\n        coord5=clamp(coord5,0.0,1.0);\n        coord6=clamp(coord6,0.0,1.0);\n    #endif\n\n    gl_Position = projMatrix * mvMatrix * pos;\n}\n",};
-const
-    render = op.inTrigger("render"),
-    trigger = op.outTrigger("trigger"),
-    amount = op.inFloat("amount", 3),
-    clamp = op.inBool("Clamp", false),
-    maskInvert = op.inBool("Mask Invert", false),
-    mask = op.inTexture("Mask");
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, "fastblur");
-
-shader.setSource(attachments.blur_vert, attachments.blur_frag);
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    uniDirX = new CGL.Uniform(shader, "f", "dirX", 0),
-    uniDirY = new CGL.Uniform(shader, "f", "dirY", 0),
-    uniWidth = new CGL.Uniform(shader, "f", "width", 0),
-    uniHeight = new CGL.Uniform(shader, "f", "height", 0),
-    uniPass = new CGL.Uniform(shader, "f", "pass", 0),
-    uniAmount = new CGL.Uniform(shader, "f", "amount", amount.get()),
-    textureAlpha = new CGL.Uniform(shader, "t", "texMask", 1);
-
-amount.onChange = () => { uniAmount.setValue(amount.get()); };
-
-const direction = op.inDropDown("direction", ["both", "vertical", "horizontal"]);
-let dir = 0;
-direction.set("both");
-direction.onChange = () =>
-{
-    if (direction.get() == "both")dir = 0;
-    if (direction.get() == "horizontal")dir = 1;
-    if (direction.get() == "vertical")dir = 2;
-};
-
-clamp.onChange = () => { shader.toggleDefine("CLAMP", clamp.get()); };
-
-maskInvert.onChange =
-mask.onChange = () =>
-{
-    shader.toggleDefine("USE_MASK", mask.isLinked());
-    shader.toggleDefine("MASK_INVERT", maskInvert.get());
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    uniWidth.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().width);
-    uniHeight.setValue(cgl.currentTextureEffect.getCurrentSourceTexture().height);
-    const numPasses = amount.get();
-
-    if (mask.get())cgl.setTexture(1, mask.get().tex);
-
-    for (let i = 0; i < numPasses; i++)
-    {
-        cgl.pushShader(shader);
-
-        uniPass.setValue(i / numPasses);
-
-        // first pass
-        if (dir === 0 || dir == 2)
-        {
-            cgl.currentTextureEffect.bind();
-            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-            uniDirX.setValue(0.0);
-            uniDirY.setValue(1.0 + (i * i));
-
-            cgl.currentTextureEffect.finish();
-        }
-
-        // second pass
-        if (dir === 0 || dir == 1)
-        {
-            cgl.currentTextureEffect.bind();
-            cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-            uniDirX.setValue(1.0 + (i * i));
-            uniDirY.setValue(0.0);
-
-            cgl.currentTextureEffect.finish();
-        }
-
-        cgl.popShader();
-    }
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.FastBlur.prototype = new CABLES.Op();
-CABLES.OPS["720ca148-dcf7-433b-bb1f-edbfb7433c6c"]={f:Ops.Gl.TextureEffects.FastBlur,objName:"Ops.Gl.TextureEffects.FastBlur"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Value.SwitchNumber
 // 
 // **************************************************************
@@ -6389,83 +5601,6 @@ CABLES.OPS["5c6d375a-82db-4366-8013-93f56b4061a9"]={f:Ops.String.NumberToString_
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.ColorMap
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.ColorMap = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"colormap_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI sampler2D gradient;\nUNI float pos;\nUNI float amount;\nUNI float vmin;\nUNI float vmax;\n\n{{CGL.BLENDMODES}}\n\n\nfloat lumi(vec3 color)\n{\n   return vec3(dot(vec3(0.2126,0.7152,0.0722), color)).r;\n}\n\nvoid main()\n{\n    vec4 base=texture(tex,texCoord);\n\n   base=clamp(base,vmin,vmax);\n\n    #ifdef METH_LUMI\n        vec4 color=texture(gradient,vec2(lumi(base.rgb),pos));\n    #endif\n\n    #ifdef METH_CHANNELS\n        vec4 color=vec4(1.0);\n        color.r=texture(gradient,vec2(base.r,pos)).r;\n        color.g=texture(gradient,vec2(base.g,pos)).g;\n        color.b=texture(gradient,vec2(base.b,pos)).b;\n    #endif\n\n//   outColor= vec4(color);\n   outColor=cgl_blend(base,color,amount);\n\n}\n",};
-let render = op.inTrigger("render");
-let trigger = op.outTrigger("trigger");
-
-const blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal");
-const amount = op.inValueSlider("Amount", 1);
-
-let inGradient = op.inTexture("Gradient");
-let inMethod = op.inSwitch("Method", ["Luminance", "Channels"], "Luminance");
-
-let inMin = op.inFloatSlider("Min", 0);
-let inMax = op.inFloatSlider("Max", 1);
-
-let inPos = op.inValueSlider("Position", 0.5);
-
-op.setPortGroup("Vertical Position", [inMin, inMax, inPos]);
-
-let cgl = op.patch.cgl;
-let shader = new CGL.Shader(cgl, op.name);
-shader.define("METH_LUMI");
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.colormap_frag);
-var textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-
-var textureUniform = new CGL.Uniform(shader, "t", "gradient", 1);
-let uniPos = new CGL.Uniform(shader, "f", "pos", inPos);
-
-let uniMin = new CGL.Uniform(shader, "f", "vmin", inMin);
-let uniMax = new CGL.Uniform(shader, "f", "vmax", inMax);
-let uniAmount = new CGL.Uniform(shader, "f", "amount", amount);
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-inMethod.onChange = () =>
-{
-    shader.toggleDefine("METH_LUMI", inMethod.get() == "Luminance");
-    shader.toggleDefine("METH_CHANNELS", inMethod.get() == "Channels");
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-    if (!inGradient.get()) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    cgl.setTexture(1, inGradient.get().tex);
-    // cgl.gl.bindTexture(cgl.gl.TEXTURE_2D, inGradient.get().tex );
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.ColorMap.prototype = new CABLES.Op();
-CABLES.OPS["58e302d7-4b84-4077-aa13-4f3cf0885205"]={f:Ops.Gl.TextureEffects.ColorMap,objName:"Ops.Gl.TextureEffects.ColorMap"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.GradientTexture
 // 
 // **************************************************************
@@ -6801,54 +5936,6 @@ CABLES.OPS["e15c0803-02bb-4783-9d75-e75abd70d910"]={f:Ops.Gl.TextureEffects.Imag
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.ToNormalMap
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.ToNormalMap = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"tonormal_frag":"#ifdef HAS_TEXTURES\n  IN vec2 texCoord;\n  UNI sampler2D tex;\n#endif\n\nUNI float strength;\n\nvoid main()\n{\n\n    float texelSize=1.0/1024.0;\n\n    float tl = abs(texture(tex, texCoord + texelSize * vec2(-1.0, -1.0)).x);   // top left\n    float  l = abs(texture(tex, texCoord + texelSize * vec2(-1.0,  0.0)).x);   // left\n    float bl = abs(texture(tex, texCoord + texelSize * vec2(-1.0,  1.0)).x);   // bottom left\n    float  t = abs(texture(tex, texCoord + texelSize * vec2( 0.0, -1.0)).x);   // top\n    float  b = abs(texture(tex, texCoord + texelSize * vec2( 0.0,  1.0)).x);   // bottom\n    float tr = abs(texture(tex, texCoord + texelSize * vec2( 1.0, -1.0)).x);   // top right\n    float  r = abs(texture(tex, texCoord + texelSize * vec2( 1.0,  0.0)).x);   // right\n    float br = abs(texture(tex, texCoord + texelSize * vec2( 1.0,  1.0)).x);   // bottom right\n\n    //     // Compute dx using Sobel:\n    //     //           -1 0 1\n    //     //           -2 0 2\n    //     //           -1 0 1\n    float dX = tr + 2.0*r + br -tl - 2.0*l - bl;\n\n    //     // Compute dy using Sobel:\n    //     //           -1 -2 -1\n    //     //            0  0  0\n    //     //            1  2  1\n    float dY = bl + 2.0*b + br -tl - 2.0*t - tr;\n\n    //     // Build the normalized normal\n\n    vec4 N = vec4(normalize(vec3(dX,dY, 1.0 / strength)), 1.0);\n\n    //     //convert (-1.0 , 1.0) to (0.0 , 1.0), if needed\n    N= N * 0.5 + 0.5;\n\n   outColor= N;\n}",};
-let render = op.inTrigger("render");
-let trigger = op.outTrigger("trigger");
-let strength = op.inValue("Strength", 4);
-let cgl = op.patch.cgl;
-let shader = new CGL.Shader(cgl, op.name);
-
-// from: https://forum.openframeworks.cc/t/compute-normal-map-from-image/1400/11
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.tonormal_frag);
-let textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-let uniStrength = new CGL.Uniform(shader, "f", "strength", strength);
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.ToNormalMap.prototype = new CABLES.Op();
-CABLES.OPS["a9aba612-dc72-4108-a6fb-f0292463a186"]={f:Ops.Gl.TextureEffects.ToNormalMap,objName:"Ops.Gl.TextureEffects.ToNormalMap"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Vars.VarSetNumber_v2
 // 
 // **************************************************************
@@ -6895,115 +5982,6 @@ new CABLES.VarGetOpWrapper(op,"number",op.varName,val);
 
 Ops.Vars.VarGetNumber_v2.prototype = new CABLES.Op();
 CABLES.OPS["421f5b52-c0fa-47c4-8b7a-012b9e1c864a"]={f:Ops.Vars.VarGetNumber_v2,objName:"Ops.Vars.VarGetNumber_v2"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.CircleTexture_v3
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.CircleTexture_v3 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"circle_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\n\nUNI float amount;\nUNI float size;\nUNI float inner;\nUNI float fadeOut;\n\nUNI float r;\nUNI float g;\nUNI float b;\nUNI float a;\nUNI float aspect;\nUNI float stretch;\n\nUNI float x;\nUNI float y;\n\n{{CGL.BLENDMODES}}\n\nfloat dist(float x,float y,float x2,float y2)\n{\n\tfloat xd = x2-x;\n\tfloat yd = y2-y;\n\treturn abs(sqrt(xd*xd + yd*yd*(1.0-stretch)));\n}\n\nvoid main()\n{\n    vec4 base=texture(tex,texCoord);\n    vec4 col=vec4(0.0,0.0,0.0,1.0);\n    float dist = dist(x,y,(texCoord.x-0.5)*2.0,(texCoord.y-0.5)*2.0*aspect);\n\n    float sz=size*0.5;\n    float v=0.0;\n    float fade=fadeOut+0.002;\n\n    if(dist<sz && dist>inner*sz) v=1.0;\n\n    #ifdef FALLOFF_SMOOTHSTEP\n        if(dist>sz && dist<sz+fade)v=1.0-(smoothstep(0.0,1.0,(dist-sz)/(fade)) );\n    #endif\n    #ifndef FALLOFF_SMOOTHSTEP\n        if(dist>sz && dist<sz+fade)v=1.0-((dist-sz)/(fade));\n    #endif\n\n    col=vec4( _blend(base.rgb,vec3(r,g,b)) ,1.0);\n    col=vec4( mix( col.rgb, base.rgb ,1.0-base.a*v*amount*a),1.0);\n    outColor=col;\n\n    #ifdef WARN_OVERFLOW\n        float width=0.01;\n        if( texCoord.x>(1.0-width) || texCoord.y>(1.0-width) || texCoord.y<width || texCoord.x<width )\n            if(v>0.001*amount)outColor= vec4(1.0,0.0,0.0, 1.0);\n    #endif\n}\n",};
-const
-    render = op.inTrigger("render"),
-    amount = op.inValueSlider("Amount", 1),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    inSize = op.inValueSlider("size"),
-    inInner = op.inValueSlider("Inner"),
-    inStretch = op.inValueSlider("Stretch"),
-    inX = op.inValue("Pos X", 0),
-    inY = op.inValue("Pos Y", 0),
-    fallOff = op.inValueSelect("fallOff", ["Linear", "SmoothStep"], "Linear"),
-    inFadeOut = op.inValueSlider("fade Out"),
-    warnOverflow = op.inValueBool("warn overflow", false);
-
-const r = op.inValueSlider("r", 1);
-const g = op.inValueSlider("g", 1);
-const b = op.inValueSlider("b", 1);
-const a = op.inValueSlider("a", 1);
-
-r.setUiAttribs({ "colorPick": true });
-
-op.setPortGroup("Size", [inSize, inInner, inStretch]);
-op.setPortGroup("Position", [inX, inY]);
-op.setPortGroup("Style", [warnOverflow, fallOff, inFadeOut]);
-
-let trigger = op.outTrigger("trigger");
-
-let cgl = op.patch.cgl;
-let shader = new CGL.Shader(cgl, "textureeffect stripes");
-shader.setSource(shader.getDefaultVertexShader(), attachments.circle_frag);
-let textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-let amountUniform = new CGL.Uniform(shader, "f", "amount", amount);
-
-let uniStretch = new CGL.Uniform(shader, "f", "stretch", inStretch);
-let uniSize = new CGL.Uniform(shader, "f", "size", inSize);
-let uniFadeOut = new CGL.Uniform(shader, "f", "fadeOut", inFadeOut);
-let uniInner = new CGL.Uniform(shader, "f", "inner", inInner);
-let aspect = new CGL.Uniform(shader, "f", "aspect", 1);
-
-inSize.set(0.25);
-
-setFallOf();
-setWarnOverflow();
-
-let
-    uniformR = new CGL.Uniform(shader, "f", "r", r),
-    uniformG = new CGL.Uniform(shader, "f", "g", g),
-    uniformB = new CGL.Uniform(shader, "f", "b", b),
-    uniformA = new CGL.Uniform(shader, "f", "a", a),
-    uniformX = new CGL.Uniform(shader, "f", "x", inX),
-    uniformY = new CGL.Uniform(shader, "f", "y", inY);
-
-fallOff.onChange = setFallOf;
-warnOverflow.onChange = setWarnOverflow;
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-function setFallOf()
-{
-    shader.removeDefine("FALLOFF_LINEAR");
-    shader.removeDefine("FALLOFF_SMOOTHSTEP");
-
-    if (fallOff.get() == "Linear") shader.define("FALLOFF_LINEAR");
-    if (fallOff.get() == "SmoothStep") shader.define("FALLOFF_SMOOTHSTEP");
-}
-
-function setWarnOverflow()
-{
-    if (warnOverflow.get()) shader.define("WARN_OVERFLOW");
-    else shader.removeDefine("WARN_OVERFLOW");
-}
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    let a = cgl.currentTextureEffect.getCurrentSourceTexture().height / cgl.currentTextureEffect.getCurrentSourceTexture().width;
-    aspect.set(a);
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.CircleTexture_v3.prototype = new CABLES.Op();
-CABLES.OPS["8add97a6-07af-4325-b8a5-dece0a9ee4ef"]={f:Ops.Gl.TextureEffects.CircleTexture_v3,objName:"Ops.Gl.TextureEffects.CircleTexture_v3"};
 
 
 
@@ -9647,69 +8625,6 @@ function dorender()
 
 Ops.Gl.ShaderEffects.VertexDisplacementMap_v4.prototype = new CABLES.Op();
 CABLES.OPS["ed36e5ad-457b-4ac6-a929-11b66951cb6c"]={f:Ops.Gl.ShaderEffects.VertexDisplacementMap_v4,objName:"Ops.Gl.ShaderEffects.VertexDisplacementMap_v4"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Gl.TextureEffects.Invert
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.Invert = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"invert_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI sampler2D texMask;\nUNI float amount;\n\n{{CGL.BLENDMODES}}\n\nvoid main()\n{\n   vec4 col=vec4(1.0,0.0,0.0,1.0);\n   col=texture(tex,texCoord);\n\n    #ifdef USE_MASK\n        #ifdef MASK_INVERT\n            if(texture(texMask,texCoord).r>0.5)\n            {\n                outColor= col;\n                return;\n            }\n        #endif\n\n        #ifndef MASK_INVERT\n            if(texture(texMask,texCoord).r<0.5)\n            {\n                outColor= col;\n                return;\n            }\n        #endif\n    #endif\n\n   vec4 invert = vec4(vec3(1.0)-col.rgb,1.0);\n\n   outColor=cgl_blend(col,invert,amount);\n}\n",};
-const render = op.inTrigger("render");
-const blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal");
-
-const maskInvert = op.inBool("Mask Invert", false);
-const mask = op.inTexture("Mask");
-
-const amount = op.inValueSlider("Amount", 1);
-const trigger = op.outTrigger("trigger");
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, op.name);
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.invert_frag);
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
-    textureMaskUniform = new CGL.Uniform(shader, "t", "texMask", 1);
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-maskInvert.onChange =
-mask.onChange = () =>
-{
-    shader.toggleDefine("USE_MASK", mask.isLinked());
-    shader.toggleDefine("MASK_INVERT", maskInvert.get());
-};
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-    if (mask.get())cgl.setTexture(1, mask.get().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.Invert.prototype = new CABLES.Op();
-CABLES.OPS["7188ff85-e73c-4a3b-8237-49508a00d63a"]={f:Ops.Gl.TextureEffects.Invert,objName:"Ops.Gl.TextureEffects.Invert"};
 
 
 
@@ -15191,127 +14106,6 @@ function backward()
 
 Ops.Trigger.Repeat_v2.prototype = new CABLES.Op();
 CABLES.OPS["a4deea80-db97-478f-ad1a-5ee30f2f47cc"]={f:Ops.Trigger.Repeat_v2,objName:"Ops.Trigger.Repeat_v2"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Array.Array_v2
-// 
-// **************************************************************
-
-Ops.Array.Array_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    inLength = op.inValueInt("Array length", 10),
-    modeSelect = op.inSwitch("Mode select", ["Number", "1,2,3,4", "0-1", "1-0"], "Number"),
-    inDefaultValue = op.inValueFloat("Default Value"),
-    outArr = op.outArray("Array"),
-    outArrayLength = op.outNumber("Array length out");
-
-let arr = [];
-
-let selectIndex = 0;
-const MODE_NUMBER = 0;
-const MODE_1_TO_4 = 1;
-const MODE_0_TO_1 = 2;
-const MODE_1_TO_0 = 3;
-
-modeSelect.onChange = onFilterChange;
-
-inDefaultValue.onChange =
-    inLength.onChange = () =>
-    {
-        reset();
-    };
-
-onFilterChange();
-reset();
-
-function onFilterChange()
-{
-    let selectedMode = modeSelect.get();
-    if (selectedMode === "Number") selectIndex = MODE_NUMBER;
-    else if (selectedMode === "1,2,3,4") selectIndex = MODE_1_TO_4;
-    else if (selectedMode === "0-1") selectIndex = MODE_0_TO_1;
-    else if (selectedMode === "1-0") selectIndex = MODE_1_TO_0;
-
-    if (selectIndex === MODE_NUMBER)
-    {
-        inDefaultValue.setUiAttribs({ "greyout": false });
-    }
-    else if (selectIndex === MODE_1_TO_4)
-    {
-        inDefaultValue.setUiAttribs({ "greyout": true });
-    }
-    else if (selectIndex === MODE_0_TO_1)
-    {
-        inDefaultValue.setUiAttribs({ "greyout": true });
-    }
-    else if (selectIndex === MODE_1_TO_0)
-    {
-        inDefaultValue.setUiAttribs({ "greyout": true });
-    }
-    op.setUiAttrib({ "extendTitle": modeSelect.get() });
-
-    reset();
-}
-
-function reset()
-{
-    arr.length = 0;
-
-    let arrLength = inLength.get();
-    let valueForArray = inDefaultValue.get();
-    let i;
-
-    // mode 0 - fill all array values with one number
-    if (selectIndex === MODE_NUMBER)
-    {
-        for (i = 0; i < arrLength; i++)
-        {
-            arr[i] = valueForArray;
-        }
-    }
-    // mode 1 Continuous number array - increments up to array length
-    else if (selectIndex === MODE_1_TO_4)
-    {
-        for (i = 0; i < arrLength; i++)
-        {
-            arr[i] = i;
-        }
-    }
-    // mode 2 Normalized array
-    else if (selectIndex === MODE_0_TO_1)
-    {
-        for (i = 0; i < arrLength; i++)
-        {
-            arr[i] = i / arrLength;
-        }
-    }
-    // mode 3 reversed Normalized array
-    else if (selectIndex === MODE_1_TO_0)
-    {
-        for (i = 0; i < arrLength; i++)
-        {
-            arr[i] = 1 - i / arrLength;
-        }
-    }
-
-    outArr.set(null);
-    outArr.set(arr);
-    outArrayLength.set(arr.length);
-}
-
-
-};
-
-Ops.Array.Array_v2.prototype = new CABLES.Op();
-CABLES.OPS["ca9219d2-9f06-4516-9cf2-98e61f84d4bb"]={f:Ops.Array.Array_v2,objName:"Ops.Array.Array_v2"};
 
 
 
@@ -29977,111 +28771,6 @@ CABLES.OPS["a7335e79-046e-40da-9e9c-db779b0a5e53"]={f:Ops.Json.ObjectGetNumber_v
 
 // **************************************************************
 // 
-// Ops.Html.AppendChild_v2
-// 
-// **************************************************************
-
-Ops.Html.AppendChild_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-// constants
-let CANVAS_ELEMENT = op.patch.cgl.canvas.parentElement;
-
-// variables
-let lastParent = null;
-let lastChild = null;
-
-// inputs
-let parentPort = op.inObject("Parent", null, "element");
-let childPort = op.inObject("Child", null, "element");
-
-// outputs
-let parentOutPort = op.outObject("Parent Out", null, "element");
-let childOutPort = op.outObject("Child Out", null, "element");
-
-// change listeners
-parentPort.onChange = update;
-childPort.onChange = update;
-
-// functions
-
-function update()
-{
-    let parent = parentPort.get();
-    let child = childPort.get();
-    if (parent !== lastParent)
-    {
-        if (parent)
-        {
-            handleParentConnect(parent, child);
-        }
-        else
-        {
-            handleParentDisconnect(parent, child);
-        }
-        lastParent = parent;
-    }
-    if (child !== lastChild)
-    {
-        if (child)
-        {
-            handleChildConnect(parent, child);
-        }
-        else
-        {
-            handleChildDisconnect(parent, child);
-        }
-        lastChild = child;
-    }
-    parentOutPort.set(parent);
-    childOutPort.set(child);
-}
-
-function handleParentConnect(parent, child)
-{
-    if (child)
-    {
-        parent.appendChild(child);
-    }
-}
-
-function handleParentDisconnect(parent, child)
-{
-    if (child)
-    {
-        CANVAS_ELEMENT.appendChild(child); // if there is no parent, append to patch
-    }
-}
-
-function handleChildConnect(parent, child)
-{
-    if (parent)
-    {
-        parent.appendChild(child);
-    }
-}
-
-function handleChildDisconnect(parent, child)
-{
-    if (lastChild)
-    {
-        CANVAS_ELEMENT.appendChild(lastChild);
-    }
-}
-
-
-};
-
-Ops.Html.AppendChild_v2.prototype = new CABLES.Op();
-CABLES.OPS["e15cfbc7-d2fa-4348-8964-66d02aec77aa"]={f:Ops.Html.AppendChild_v2,objName:"Ops.Html.AppendChild_v2"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Website.Cookie
 // 
 // **************************************************************
@@ -30121,543 +28810,6 @@ function update()
 
 Ops.Website.Cookie.prototype = new CABLES.Op();
 CABLES.OPS["a02b3bbe-eace-4a2e-b02b-1bf1e398d78a"]={f:Ops.Website.Cookie,objName:"Ops.Website.Cookie"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Ui.SubPatch
-// 
-// **************************************************************
-
-Ops.Ui.SubPatch = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-op.dyn = op.addInPort(new CABLES.Port(op, "create port", CABLES.OP_PORT_TYPE_DYNAMIC));
-op.dynOut = op.addOutPort(new CABLES.Port(op, "create port out", CABLES.OP_PORT_TYPE_DYNAMIC));
-
-const dataStr = op.addInPort(new CABLES.Port(op, "dataStr", CABLES.OP_PORT_TYPE_VALUE, { "display": "readonly" }));
-op.patchId = op.addInPort(new CABLES.Port(op, "patchId", CABLES.OP_PORT_TYPE_VALUE, { "display": "readonly" }));
-
-if (CABLES.UI && CABLES.sandbox.isDevEnv())
-{
-    const inMakeBp = op.inTriggerButton("Create Blueprint");
-    inMakeBp.setUiAttribs({ "hidePort": true });
-
-    inMakeBp.onTriggered = makeBlueprint;
-}
-
-dataStr.setUiAttribs({ "hideParam": true });
-op.patchId.setUiAttribs({ "hideParam": true });
-
-let data = { "ports": [], "portsOut": [] };
-
-// Ops.Ui.Patch.maxPatchId=CABLES.generateUUID();
-
-op.patchId.onChange = function ()
-{
-    const oldPatchOps = op.patch.getSubPatchOps(oldPatchId);
-
-    if (oldPatchOps.length == 2)
-    {
-        for (let i = 0; i < oldPatchOps.length; i++)
-        {
-            op.patch.deleteOp(oldPatchOps[i].id);
-        }
-    }
-    else
-    {
-    }
-};
-
-var oldPatchId = CABLES.generateUUID();
-op.patchId.set(oldPatchId);
-
-op.onLoaded = function ()
-{
-    // op.patchId.set(CABLES.generateUUID());
-};
-
-op.onLoadedValueSet = function ()
-{
-    data = JSON.parse(dataStr.get());
-    if (!data)
-    {
-        data = { "ports": [], "portsOut": [] };
-    }
-    setupPorts();
-};
-
-function loadData()
-{
-}
-
-getSubPatchInputOp();
-getSubPatchOutputOp();
-
-let dataLoaded = false;
-dataStr.onChange = function ()
-{
-    if (dataLoaded) return;
-
-    if (!dataStr.get()) return;
-    try
-    {
-        loadData();
-    }
-    catch (e)
-    {
-        op.logError("cannot load subpatch data...");
-        op.logError(e);
-    }
-};
-
-function saveData()
-{
-    dataStr.set(JSON.stringify(data));
-}
-
-op.saveData = saveData;
-
-function addPortListener(newPort, newPortInPatch)
-{
-    newPort.addEventListener("onUiAttrChange", function (attribs)
-    {
-        if (attribs.title)
-        {
-            let i = 0;
-            for (i = 0; i < data.portsOut.length; i++)
-                if (data.portsOut[i].name == newPort.name)
-                    data.portsOut[i].title = attribs.title;
-
-            for (i = 0; i < data.ports.length; i++)
-                if (data.ports[i].name == newPort.name)
-                    data.ports[i].title = attribs.title;
-
-            saveData();
-        }
-    });
-
-    if (newPort.direction == CABLES.PORT_DIR_IN)
-    {
-        if (newPort.type == CABLES.OP_PORT_TYPE_FUNCTION)
-        {
-            newPort.onTriggered = function ()
-            {
-                if (newPortInPatch.isLinked())
-                    newPortInPatch.trigger();
-            };
-        }
-        else
-        {
-            newPort.onChange = function ()
-            {
-                newPortInPatch.set(newPort.get());
-            };
-        }
-    }
-}
-
-function setupPorts()
-{
-    if (!op.patchId.get()) return;
-    const ports = data.ports || [];
-    const portsOut = data.portsOut || [];
-    let i = 0;
-
-    for (i = 0; i < ports.length; i++)
-    {
-        if (!op.getPortByName(ports[i].name))
-        {
-            const newPort = op.addInPort(new CABLES.Port(op, ports[i].name, ports[i].type));
-
-            const patchInputOp = getSubPatchInputOp();
-            const newPortInPatch = patchInputOp.addOutPort(new CABLES.Port(patchInputOp, ports[i].name, ports[i].type));
-
-            newPort.ignoreValueSerialize = true;
-            newPort.setUiAttribs({ "editableTitle": true });
-            if (ports[i].title)
-            {
-                newPort.setUiAttribs({ "title": ports[i].title });
-                newPortInPatch.setUiAttribs({ "title": ports[i].title });
-            }
-            if (ports[i].objType)
-            {
-                newPort.setUiAttribs({ "objType": ports[i].objType });
-                newPortInPatch.setUiAttribs({ "objType": ports[i].objType });
-            }
-            addPortListener(newPort, newPortInPatch);
-        }
-    }
-
-    for (i = 0; i < portsOut.length; i++)
-    {
-        if (!op.getPortByName(portsOut[i].name))
-        {
-            const newPortOut = op.addOutPort(new CABLES.Port(op, portsOut[i].name, portsOut[i].type));
-            const patchOutputOp = getSubPatchOutputOp();
-            const newPortOutPatch = patchOutputOp.addInPort(new CABLES.Port(patchOutputOp, portsOut[i].name, portsOut[i].type));
-
-            newPortOut.ignoreValueSerialize = true;
-            newPortOut.setUiAttribs({ "editableTitle": true });
-
-            if (portsOut[i].title)
-            {
-                newPortOut.setUiAttribs({ "title": portsOut[i].title });
-                newPortOutPatch.setUiAttribs({ "title": portsOut[i].title });
-            }
-            if (portsOut[i].objType)
-            {
-                newPortOut.setUiAttribs({ "objType": portsOut[i].objType });
-                newPortOutPatch.setUiAttribs({ "objType": portsOut[i].objType });
-            }
-
-            // addPortListener(newPortOut,newPortOutPatch);
-            addPortListener(newPortOutPatch, newPortOut);
-        }
-    }
-
-    dataLoaded = true;
-}
-
-op.addNewInPort = function (otherPort, type, objType)
-{
-    const newName = "in" + data.ports.length + " " + otherPort.parent.name + " " + otherPort.name;
-
-    const o = { "name": newName, "type": otherPort.type };
-    if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
-
-    data.ports.push(o);
-    setupPorts();
-    return newName;
-};
-
-op.dyn.onLinkChanged = function ()
-{
-    if (op.dyn.isLinked())
-    {
-        const otherPort = op.dyn.links[0].getOtherPort(op.dyn);
-        op.dyn.removeLinks();
-        otherPort.removeLinkTo(op.dyn);
-
-        op.log("dyn link changed!!!");
-
-        // const newName = "in" + data.ports.length + " " + otherPort.parent.name + " " + otherPort.name;
-
-        // const o = { "name": newName, "type": otherPort.type };
-        // if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
-        // data.ports.push(o);
-
-        // setupPorts();
-
-        const newName = op.addNewInPort(otherPort);
-
-        const l = gui.scene().link(
-            otherPort.parent,
-            otherPort.getName(),
-            op,
-            newName
-        );
-
-        dataLoaded = true;
-        saveData();
-    }
-    else
-    {
-        setTimeout(function ()
-        {
-            op.dyn.removeLinks();
-        }, 100);
-    }
-};
-
-op.addNewOutPort = function (otherPort, type, objType)
-{
-    const newName = "out" + data.portsOut.length + " " + otherPort.parent.name + " " + otherPort.name;
-
-    const o = { "name": newName, "type": otherPort.type };
-    if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
-
-    data.portsOut.push(o);
-    setupPorts();
-    return newName;
-};
-
-op.dynOut.onLinkChanged = function ()
-{
-    if (op.dynOut.isLinked())
-    {
-        const otherPort = op.dynOut.links[0].getOtherPort(op.dynOut);
-        op.dynOut.removeLinks();
-        otherPort.removeLinkTo(op.dynOut);
-
-        const newName = op.addNewOutPort(otherPort);
-
-        gui.scene().link(
-            otherPort.parent,
-            otherPort.getName(),
-            op,
-            newName
-        );
-
-        dataLoaded = true;
-        saveData();
-    }
-    else
-    {
-        setTimeout(function ()
-        {
-            op.dynOut.removeLinks();
-        }, 100);
-
-        op.log("dynOut unlinked...");
-    }
-};
-
-function getSubPatchOutputOp()
-{
-    let patchOutputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchOutput");
-
-    if (!patchOutputOP)
-    {
-        op.patch.addOp("Ops.Ui.PatchOutput", { "subPatch": op.patchId.get() });
-        patchOutputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchOutput");
-
-        if (!patchOutputOP) op.warn("no patchinput2!");
-    }
-    return patchOutputOP;
-}
-
-function getSubPatchInputOp()
-{
-    let patchInputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchInput");
-
-    if (!patchInputOP)
-    {
-        op.patch.addOp("Ops.Ui.PatchInput", { "subPatch": op.patchId.get() });
-        patchInputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchInput");
-        if (!patchInputOP) op.warn("no patchinput2!");
-    }
-
-    return patchInputOP;
-}
-
-op.addSubLink = function (p, p2)
-{
-    const num = data.ports.length;
-    const sublPortname = "in" + (num - 1) + " " + p2.parent.name + " " + p2.name;
-
-    if (p.direction == CABLES.PORT_DIR_IN)
-    {
-        gui.scene().link(
-            p.parent,
-            p.getName(),
-            getSubPatchInputOp(),
-            sublPortname
-        );
-    }
-    else
-    {
-        gui.scene().link(
-            p.parent,
-            p.getName(),
-            getSubPatchOutputOp(),
-            "out" + (num) + " " + p2.parent.name + " " + p2.name
-        );
-    }
-
-    const bounds = gui.patchView.getSubPatchBounds(op.patchId.get());
-    op.log("subpatchbounds", bounds);
-    getSubPatchInputOp().uiAttr(
-        {
-            "translate":
-            {
-                "x": bounds.minx,
-                "y": bounds.miny - 100
-            }
-        });
-
-    getSubPatchOutputOp().uiAttr(
-        {
-            "translate":
-            {
-                "x": bounds.minx,
-                "y": bounds.maxy + 100
-            }
-        });
-    saveData();
-    return sublPortname;
-};
-
-op.onDelete = function ()
-{
-    for (let i = op.patch.ops.length - 1; i >= 0; i--)
-    {
-        if (op.patch.ops[i] && op.patch.ops[i].uiAttribs && op.patch.ops[i].uiAttribs.subPatch == op.patchId.get())
-        {
-            op.patch.deleteOp(op.patch.ops[i].id);
-        }
-    }
-};
-
-function makeBlueprint()
-{
-    const bpOp = op.patch.addOp(CABLES.UI.DEFAULTOPNAMES.blueprint);
-
-    bpOp.getPortByName("externalPatchId").set(gui.patchId);
-    bpOp.getPortByName("subPatchId").set(op.patchId.get());
-    bpOp.getPortByName("active").set(true);
-
-    bpOp.uiAttr(
-        {
-            "translate":
-            {
-                "x": op.uiAttribs.translate.x - 150,
-                "y": op.uiAttribs.translate.y
-            }
-        });
-}
-
-
-};
-
-Ops.Ui.SubPatch.prototype = new CABLES.Op();
-CABLES.OPS["84d9a6f0-ed7a-466d-b386-225ed9e89c60"]={f:Ops.Ui.SubPatch,objName:"Ops.Ui.SubPatch"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Html.ElementChilds_v2
-// 
-// **************************************************************
-
-Ops.Html.ElementChilds_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const
-    parentPort = op.inObject("Parent"),
-    outParent = op.outObject("Parent Out");
-
-const canvas = op.patch.cgl.canvas.parentElement;
-
-const inPorts = [];
-for (let i = 0; i < 10; i++)
-{
-    const p = op.inObject("Child " + (i + 1));
-    inPorts.push(p);
-    p.onChange = () =>
-    {
-        rebuild();
-        if (!p.get())
-        {
-            const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
-            const currentChild = canvas.querySelector(selector);
-            if (currentChild) delete currentChild.dataset.cablesChildId;
-        }
-    };
-    p.onLinkChanged = () =>
-    {
-        if (!p.isLinked())
-        {
-            const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
-            const currentChild = canvas.querySelector(selector);
-            if (currentChild) currentChild.remove();
-        }
-    };
-}
-
-parentPort.onLinkChanged = () =>
-{
-    if (!parentPort.isLinked())
-    {
-        cleanUp();
-    }
-    else
-    {
-        rebuild();
-    }
-};
-
-outParent.onLinkChanged = () =>
-{
-    if (!outParent.isLinked())
-    {
-        const parentDiv = parentPort.get();
-        if (parentDiv && parentDiv.dataset.op)
-        {
-            const inDoc = canvas.querySelector("[data-op=' " + parentDiv.dataset.op + " ']");
-            if (!inDoc)
-            {
-                canvas.appendChild(parentDiv);
-            }
-        }
-    }
-};
-
-parentPort.onChange = () =>
-{
-    if (!parentPort.get())
-    {
-        cleanUp();
-    }
-    rebuild();
-};
-
-function cleanUp()
-{
-    for (let i = 0; i < inPorts.length; i++)
-    {
-        const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
-        const currentChild = canvas.querySelector(selector);
-        if (currentChild && currentChild.parentNode)
-        {
-            currentChild.remove();
-        }
-    }
-    outParent.set(null);
-}
-
-function rebuild()
-{
-    const parent = parentPort.get();
-    if (!parent)
-    {
-        outParent.set(null);
-        return;
-    }
-
-    for (let i = 0; i < inPorts.length; i++)
-    {
-        const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
-        const currentChild = parent.querySelector(selector);
-        if (currentChild)
-        {
-            currentChild.remove();
-        }
-        const p = inPorts[i].get();
-        if (p && parent)
-        {
-            p.dataset.cablesChildId = op.id + "_" + i;
-            parent.appendChild(p);
-        }
-    }
-
-    outParent.set(null);
-    outParent.set(parent);
-}
-
-
-};
-
-Ops.Html.ElementChilds_v2.prototype = new CABLES.Op();
-CABLES.OPS["ad7eea9a-f4af-4ab7-bb70-922242529681"]={f:Ops.Html.ElementChilds_v2,objName:"Ops.Html.ElementChilds_v2"};
 
 
 
@@ -30905,66 +29057,6 @@ inObj.onChange = () =>
 
 Ops.Json.ObjectValues.prototype = new CABLES.Op();
 CABLES.OPS["32ff73f5-7947-42b0-83fa-e079af7beb5c"]={f:Ops.Json.ObjectValues,objName:"Ops.Json.ObjectValues"};
-
-
-
-
-// **************************************************************
-// 
-// Ops.Value.SwitchNumberOnTrigger
-// 
-// **************************************************************
-
-Ops.Value.SwitchNumberOnTrigger = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-var triggers=[];
-
-var currentVal=op.outValue("Value");
-var oldVal=op.outValue("Last Value");
-
-var triggered=op.outTrigger("Triggered");
-
-var inVals=[];
-var inExes=[];
-
-function onTrigger()
-{
-    oldVal.set(currentVal.get());
-    currentVal.set( inVals[this.slot].get() );
-    triggered.trigger();
-}
-
-var num=8;
-for(var i=0;i<num;i++)
-{
-    var newExe=op.addInPort(new CABLES.Port(op,"Trigger "+i,CABLES.OP_PORT_TYPE_FUNCTION));
-    newExe.slot=i;
-    newExe.onTriggered=onTrigger.bind(newExe);
-    var newVal=op.addInPort(new CABLES.Port(op,"Value "+i,CABLES.OP_PORT_TYPE_VALUE));
-    inVals.push( newVal );
-}
-
-var defaultVal = op.inValueString("Default Value");
-
-currentVal.set(defaultVal.get());
-oldVal.set(defaultVal.get());
-
-defaultVal.onChange = function(){
-    oldVal.set(currentVal.get());
-    currentVal.set(defaultVal.get());  
-};
-
-
-
-
-
-};
-
-Ops.Value.SwitchNumberOnTrigger.prototype = new CABLES.Op();
-CABLES.OPS["338032c5-bf47-454b-8ae1-cd91f17e5c5b"]={f:Ops.Value.SwitchNumberOnTrigger,objName:"Ops.Value.SwitchNumberOnTrigger"};
 
 
 
@@ -31602,95 +29694,6 @@ CABLES.OPS["1db230c8-212f-4679-87d6-3531659363da"]={f:Ops.Array.InfoArray,objNam
 
 // **************************************************************
 // 
-// Ops.Gl.TextureEffects.WaveformGradient_v2
-// 
-// **************************************************************
-
-Ops.Gl.TextureEffects.WaveformGradient_v2 = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={"waveform_v2_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float uFreq;\nUNI float uOffset;\nUNI float uPow;\nUNI float uRotate;\nUNI float amount;\n\nUNI float r;\nUNI float g;\nUNI float b;\n\n{{CGL.BLENDMODES}}\n\n#define PI 3.14159265359\n#define TAU (2.0 * PI)\n\nvoid pR(inout vec2 p, float a)\n{\n    float s = sin(a),c=cos(a); p *= mat2(c,s,-s,c);\n}\n\nfloat pModMirror1(inout float p, float size) {\n\tfloat halfsize = size * 0.5;\n\tfloat c = floor((p + halfsize)/size);\n\tp = mod(p + halfsize,size) - halfsize;\n\tp *= mod(c, 2.0) * 2.0 - 1.0;\n\treturn c;\n}\n\nvoid main()\n{\n    vec2 uv = texCoord;\n    float v = 0.0;\n\n    uv -= 0.5;\n    pR(uv,TAU * uRotate);\n    uv += 0.5 + uOffset;\n\n    uv.x *= uFreq;\n\n    #ifdef MODE_SINE\n        uv.x += 0.5;\n        pModMirror1(uv.x,1.0);\n        v = pow(cos(PI * uv.x / 2.0),uPow);\n    #endif\n\n    #ifdef MODE_SAW\n        uv.x = mod(uv.x,1.0);\n        v = pow(min(cos(PI * uv.x /2.0),1.0 - abs(uv.x)),uPow);\n    #endif\n\n    #ifdef MODE_TRI\n        uv.x += 0.5;\n        pModMirror1(uv.x,1.0);\n        uv.x = -abs(uv.x);\n        uv.x = fract(uv.x);\n        v = pow(uv.x,uPow);\n    #endif\n\n    #ifdef MODE_SQR\n        pModMirror1(uv.x,1.0);\n        uv.x = -abs(uv.x);\n        uv.x = fract(uv.x);\n        v = step(uv.x,uPow);\n    #endif\n\n    vec4 col = vec4(vec3(r,g,b),1.0);\n    vec4 base = texture(tex,texCoord);\n\n    outColor = cgl_blend(base,col,v*amount);\n}\n",};
-const
-    render = op.inTrigger("render"),
-    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
-    amount = op.inValueSlider("Amount", 1),
-    mode = op.inValueSelect("Mode", ["Sine", "Sawtooth", "Triangle", "Square"], "Sine"),
-    freq = op.inValue("Frequency", 4),
-    pow = op.inValue("Pow factor", 6),
-    offset = op.inValue("Offset", 0),
-    rotate = op.inFloatSlider("Rotate", 0),
-    r = op.inValueSlider("r", 1.0),
-    g = op.inValueSlider("g", 1.0),
-    b = op.inValueSlider("b", 1.0),
-    trigger = op.outTrigger("trigger");
-
-op.setPortGroup("Waveform", [mode, freq, pow, offset, rotate]);
-op.setPortGroup("Color", [r, g, b]);
-
-r.setUiAttribs({ "colorPick": true });
-
-const cgl = op.patch.cgl;
-const shader = new CGL.Shader(cgl, op.name);
-
-shader.setSource(shader.getDefaultVertexShader(), attachments.waveform_v2_frag);
-
-mode.onChange = updateMode;
-
-const
-    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
-    freqUniform = new CGL.Uniform(shader, "f", "uFreq", freq),
-    offsetUniform = new CGL.Uniform(shader, "f", "uOffset", offset),
-    powUniform = new CGL.Uniform(shader, "f", "uPow", pow),
-    rotateUniform = new CGL.Uniform(shader, "f", "uRotate", rotate),
-    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
-    uniformR = new CGL.Uniform(shader, "f", "r", r),
-    uniformG = new CGL.Uniform(shader, "f", "g", g),
-    uniformB = new CGL.Uniform(shader, "f", "b", b);
-
-updateMode();
-
-CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
-
-function updateMode()
-{
-    shader.removeDefine("MODE_SAW");
-    shader.removeDefine("MODE_SINE");
-    shader.removeDefine("MODE_TRI");
-    shader.removeDefine("MODE_SQR");
-
-    if (mode.get() == "Sine")shader.define("MODE_SINE");
-    else if (mode.get() == "Sawtooth")shader.define("MODE_SAW");
-    else if (mode.get() == "Triangle")shader.define("MODE_TRI");
-    else if (mode.get() == "Square")shader.define("MODE_SQR");
-}
-
-render.onTriggered = function ()
-{
-    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
-
-    cgl.pushShader(shader);
-    cgl.currentTextureEffect.bind();
-
-    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
-
-    cgl.currentTextureEffect.finish();
-    cgl.popShader();
-
-    trigger.trigger();
-};
-
-
-};
-
-Ops.Gl.TextureEffects.WaveformGradient_v2.prototype = new CABLES.Op();
-CABLES.OPS["08d2ef19-3517-4c15-b9c6-56dc107e10ef"]={f:Ops.Gl.TextureEffects.WaveformGradient_v2,objName:"Ops.Gl.TextureEffects.WaveformGradient_v2"};
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.TextureToPoints
 // 
 // **************************************************************
@@ -32071,6 +30074,138 @@ function doShare(shareData)
 
 Ops.Browser.WebShare.prototype = new CABLES.Op();
 CABLES.OPS["2e24a18f-161a-480c-a86b-4232c59f68c4"]={f:Ops.Browser.WebShare,objName:"Ops.Browser.WebShare"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Html.ElementChilds_v2
+// 
+// **************************************************************
+
+Ops.Html.ElementChilds_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    parentPort = op.inObject("Parent"),
+    outParent = op.outObject("Parent Out");
+
+const canvas = op.patch.cgl.canvas.parentElement;
+
+const inPorts = [];
+for (let i = 0; i < 10; i++)
+{
+    const p = op.inObject("Child " + (i + 1));
+    inPorts.push(p);
+    p.onChange = () =>
+    {
+        rebuild();
+        if (!p.get())
+        {
+            const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
+            const currentChild = canvas.querySelector(selector);
+            if (currentChild) delete currentChild.dataset.cablesChildId;
+        }
+    };
+    p.onLinkChanged = () =>
+    {
+        if (!p.isLinked())
+        {
+            const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
+            const currentChild = canvas.querySelector(selector);
+            if (currentChild) currentChild.remove();
+        }
+    };
+}
+
+parentPort.onLinkChanged = () =>
+{
+    if (!parentPort.isLinked())
+    {
+        cleanUp();
+    }
+    else
+    {
+        rebuild();
+    }
+};
+
+outParent.onLinkChanged = () =>
+{
+    if (!outParent.isLinked())
+    {
+        const parentDiv = parentPort.get();
+        if (parentDiv && parentDiv.dataset.op)
+        {
+            const inDoc = canvas.querySelector("[data-op=' " + parentDiv.dataset.op + " ']");
+            if (!inDoc)
+            {
+                canvas.appendChild(parentDiv);
+            }
+        }
+    }
+};
+
+parentPort.onChange = () =>
+{
+    if (!parentPort.get())
+    {
+        cleanUp();
+    }
+    rebuild();
+};
+
+function cleanUp()
+{
+    for (let i = 0; i < inPorts.length; i++)
+    {
+        const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
+        const currentChild = canvas.querySelector(selector);
+        if (currentChild && currentChild.parentNode)
+        {
+            currentChild.remove();
+        }
+    }
+    outParent.set(null);
+}
+
+function rebuild()
+{
+    const parent = parentPort.get();
+    if (!parent)
+    {
+        outParent.set(null);
+        return;
+    }
+
+    for (let i = 0; i < inPorts.length; i++)
+    {
+        const selector = "[data-cables-child-id='" + op.id + "_" + i + "']";
+        const currentChild = parent.querySelector(selector);
+        if (currentChild)
+        {
+            currentChild.remove();
+        }
+        const p = inPorts[i].get();
+        if (p && parent)
+        {
+            p.dataset.cablesChildId = op.id + "_" + i;
+            parent.appendChild(p);
+        }
+    }
+
+    outParent.set(null);
+    outParent.set(parent);
+}
+
+
+};
+
+Ops.Html.ElementChilds_v2.prototype = new CABLES.Op();
+CABLES.OPS["ad7eea9a-f4af-4ab7-bb70-922242529681"]={f:Ops.Html.ElementChilds_v2,objName:"Ops.Html.ElementChilds_v2"};
 
 
 
@@ -32673,6 +30808,1021 @@ CABLES.OPS["1e76f92b-1eed-4575-96e1-fcff6ed08c04"]={f:Ops.Website.LocationHashRo
 
 // **************************************************************
 // 
+// Ops.Sidebar.Incrementor_v2
+// 
+// **************************************************************
+
+Ops.Sidebar.Incrementor_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+// inputs
+const parentPort = op.inObject("link");
+const labelPort = op.inString("Label", "Incrementor");
+const inMin = op.inValue("min", 0);
+const inMax = op.inValue("max", 10);
+const inStepsize = op.inValue("stepsize", 1);
+const inDefault = op.inValue("Default", 0);
+const inValues = op.inArray("Values");
+const inSetDefault = op.inTriggerButton("Set Default");
+inSetDefault.onTriggered = setDefaultValue;
+
+// outputs
+const siblingsPort = op.outObject("childs");
+const outValue = op.outNumber("value");
+
+// vars
+let currentPosition = 0;
+
+const containerEl = document.createElement("div");
+containerEl.dataset.op = op.id;
+containerEl.classList.add("cablesEle");
+containerEl.classList.add("sidebar__item");
+const label = document.createElement("div");
+label.classList.add("sidebar__item-label");
+label.addEventListener("dblclick", function ()
+{
+    outValue.set(inDefault.get());
+});
+const labelTextEl = document.createTextNode(labelPort.get());
+label.appendChild(labelTextEl);
+containerEl.appendChild(label);
+
+const innerContainer = document.createElement("span");
+innerContainer.classList.add("sidebar__item__right");
+
+// value
+const valueEl = document.createElement("span");
+valueEl.style.marginRight = "10px";
+
+let valueText = document.createTextNode(inMin.get());
+if (Array.isArray(inValues.get()))
+{
+    valueText = document.createTextNode(inValues.get()[currentPosition]);
+}
+
+valueEl.appendChild(valueText);
+innerContainer.appendChild(valueEl);
+
+// previous
+const prevEl = document.createElement("span");
+prevEl.classList.add("sidebar--button");
+prevEl.style.marginRight = "3px";
+const prevInput = document.createElement("div");
+prevInput.classList.add("sidebar__button-input");
+prevInput.classList.add("minus");
+prevEl.appendChild(prevInput);
+prevInput.addEventListener("click", onPrev);
+const prevText = document.createTextNode("-");
+prevInput.appendChild(prevText);
+innerContainer.appendChild(prevEl);
+
+// next
+const nextEl = document.createElement("span");
+nextEl.classList.add("sidebar--button");
+const nextInput = document.createElement("div");
+nextInput.classList.add("sidebar__button-input");
+nextInput.classList.add("plus");
+nextEl.appendChild(nextInput);
+nextInput.addEventListener("click", onNext);
+const nextText = document.createTextNode("+");
+nextInput.appendChild(nextText);
+
+innerContainer.appendChild(nextEl);
+containerEl.appendChild(innerContainer);
+
+op.toWorkNeedsParent("Ops.Sidebar.Sidebar");
+
+function setDefaultValue()
+{
+    inDefault.set(outValue.get());
+    if (CABLES.UI && op.isCurrentUiOp())
+    {
+        gui.opParams.show(op); /* update DOM */
+    }
+}
+
+// events
+parentPort.onChange = onParentChanged;
+inValues.onChange = onValueChange;
+labelPort.onChange = onLabelTextChanged;
+op.onDelete = onDelete;
+
+op.onLoaded = op.onInit = function ()
+{
+    if (Array.isArray(inValues.get()))
+    {
+        inDefault.setUiAttribs({ "greyout": true });
+    }
+    else
+    {
+        outValue.set(inDefault.get());
+        valueText.textContent = inDefault.get();
+    }
+};
+
+function onValueChange()
+{
+    const values = inValues.get();
+    let value = inMin.get();
+    if (Array.isArray(values))
+    {
+        value = values[currentPosition];
+        inMin.setUiAttribs({ "greyout": true });
+        inMax.set(values.length - 1);
+        inMax.setUiAttribs({ "greyout": true });
+        inStepsize.setUiAttribs({ "greyout": true });
+        inStepsize.set(1);
+        inDefault.setUiAttribs({ "greyout": true });
+        inDefault.set(0);
+    }
+    else
+    {
+        inMin.setUiAttribs({ "greyout": false });
+        inMax.setUiAttribs({ "greyout": false });
+        inStepsize.setUiAttribs({ "greyout": false });
+        inDefault.setUiAttribs({ "greyout": false });
+    }
+    outValue.set(value);
+    valueText.textContent = value;
+}
+
+function onNext()
+{
+    const values = inValues.get();
+    let value = 0;
+    if (!Array.isArray(values))
+    {
+        // no array given, increment/decrement according to params
+        const currentValue = outValue.get();
+        value = Math.min(currentValue + inStepsize.get(), inMax.get());
+    }
+    else
+    {
+        // user inputs an array, iterate fields, ignore min/max/stepsize
+        if (currentPosition < values.length - 1)
+        {
+            currentPosition += Math.ceil(inStepsize.get());
+        }
+        value = values[currentPosition];
+    }
+    valueText.textContent = value;
+    outValue.set(value);
+}
+
+function onPrev()
+{
+    const values = inValues.get();
+    let value = 0;
+    if (!Array.isArray(values))
+    {
+        // no array given, increment/decrement according to params
+        const currentValue = outValue.get();
+        value = Math.max(currentValue - inStepsize.get(), inMin.get());
+    }
+    else
+    {
+        // user inputs an array, iterate fields, ignore min/max/stepsize
+        if (currentPosition > 0)
+        {
+            currentPosition -= Math.ceil(inStepsize.get());
+        }
+        value = values[currentPosition];
+    }
+    valueText.textContent = value;
+    outValue.set(value);
+}
+
+function onParentChanged()
+{
+    siblingsPort.set(null);
+    const parent = parentPort.get();
+    if (parent && parent.parentElement)
+    {
+        parent.parentElement.appendChild(containerEl);
+        siblingsPort.set(parent);
+    }
+    else if (containerEl.parentElement)
+    {
+        // detach
+        containerEl.parentElement.removeChild(containerEl);
+    }
+}
+
+function onLabelTextChanged()
+{
+    const labelText = labelPort.get();
+    label.textContent = labelText;
+
+    if (CABLES.UI)
+    {
+        op.setTitle(labelText);
+    }
+}
+
+function onDelete()
+{
+    removeElementFromDOM(containerEl);
+}
+
+function removeElementFromDOM(el)
+{
+    if (el && el.parentNode && el.parentNode.removeChild)
+    {
+        el.parentNode.removeChild(el);
+    }
+}
+
+
+};
+
+Ops.Sidebar.Incrementor_v2.prototype = new CABLES.Op();
+CABLES.OPS["13932cbc-2bd4-4b2a-b6e0-cda6df4cec54"]={f:Ops.Sidebar.Incrementor_v2,objName:"Ops.Sidebar.Incrementor_v2"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Value.ToggleNumber
+// 
+// **************************************************************
+
+Ops.Value.ToggleNumber = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    useValue1Port = op.inValueBool("Use Value 1", false),
+    value0port = op.inValue("Value 0", 0),
+    value1port = op.inValue("Value 1", 1),
+    outValuePort = op.outNumber("Out Value", 0);
+
+value0port.onChange =
+    value1port.onChange =
+    useValue1Port.onChange = setOutput;
+
+function setOutput()
+{
+    const useValue1 = useValue1Port.get();
+    if (useValue1)
+    {
+        outValuePort.set(value1port.get());
+    }
+    else
+    {
+        outValuePort.set(value0port.get());
+    }
+}
+
+
+};
+
+Ops.Value.ToggleNumber.prototype = new CABLES.Op();
+CABLES.OPS["400eea7d-5a68-4dda-a94d-2bb2ee7c2331"]={f:Ops.Value.ToggleNumber,objName:"Ops.Value.ToggleNumber"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Boolean.TriggerChangedFalse
+// 
+// **************************************************************
+
+Ops.Boolean.TriggerChangedFalse = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+
+var val=op.inValueBool("Value",false);
+
+var next=op.outTrigger("Next");
+
+var oldVal=0;
+
+val.onChange=function()
+{
+    var newVal=val.get();
+    if(oldVal && !newVal)
+    {
+        oldVal=false;
+        next.trigger();
+    }
+    else
+    {
+        oldVal=true;
+    }
+};
+
+};
+
+Ops.Boolean.TriggerChangedFalse.prototype = new CABLES.Op();
+CABLES.OPS["6387bcb0-6091-4199-8ab7-f96ad4aa3c7d"]={f:Ops.Boolean.TriggerChangedFalse,objName:"Ops.Boolean.TriggerChangedFalse"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Ui.VizNumber
+// 
+// **************************************************************
+
+Ops.Ui.VizNumber = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const inNum = op.inFloat("Number", 0);
+const outNum = op.outNumber("Result");
+
+op.setUiAttrib({ "widthOnlyGrow": true });
+
+inNum.onChange = () =>
+{
+    let n = inNum.get();
+    if (op.patch.isEditorMode())
+    {
+        let str = "";
+        if (n === null)str = "null";
+        else if (n === undefined)str = "undefined";
+        else
+        {
+            str = "" + Math.round(n * 10000) / 10000;
+
+            if (str[0] != "-")str = " " + str;
+        }
+
+        op.setUiAttribs({ "extendTitle": str });
+
+        // op.setTitle(str+" ");
+    }
+
+    outNum.set(n);
+};
+
+
+};
+
+Ops.Ui.VizNumber.prototype = new CABLES.Op();
+CABLES.OPS["2b60d12d-2884-4ad0-bda4-0caeb6882f5c"]={f:Ops.Ui.VizNumber,objName:"Ops.Ui.VizNumber"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Value.SwitchNumberOnTrigger
+// 
+// **************************************************************
+
+Ops.Value.SwitchNumberOnTrigger = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+var triggers=[];
+
+var currentVal=op.outValue("Value");
+var oldVal=op.outValue("Last Value");
+
+var triggered=op.outTrigger("Triggered");
+
+var inVals=[];
+var inExes=[];
+
+function onTrigger()
+{
+    oldVal.set(currentVal.get());
+    currentVal.set( inVals[this.slot].get() );
+    triggered.trigger();
+}
+
+var num=8;
+for(var i=0;i<num;i++)
+{
+    var newExe=op.addInPort(new CABLES.Port(op,"Trigger "+i,CABLES.OP_PORT_TYPE_FUNCTION));
+    newExe.slot=i;
+    newExe.onTriggered=onTrigger.bind(newExe);
+    var newVal=op.addInPort(new CABLES.Port(op,"Value "+i,CABLES.OP_PORT_TYPE_VALUE));
+    inVals.push( newVal );
+}
+
+var defaultVal = op.inValueString("Default Value");
+
+currentVal.set(defaultVal.get());
+oldVal.set(defaultVal.get());
+
+defaultVal.onChange = function(){
+    oldVal.set(currentVal.get());
+    currentVal.set(defaultVal.get());  
+};
+
+
+
+
+
+};
+
+Ops.Value.SwitchNumberOnTrigger.prototype = new CABLES.Op();
+CABLES.OPS["338032c5-bf47-454b-8ae1-cd91f17e5c5b"]={f:Ops.Value.SwitchNumberOnTrigger,objName:"Ops.Value.SwitchNumberOnTrigger"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Ui.SubPatch
+// 
+// **************************************************************
+
+Ops.Ui.SubPatch = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+op.dyn = op.addInPort(new CABLES.Port(op, "create port", CABLES.OP_PORT_TYPE_DYNAMIC));
+op.dynOut = op.addOutPort(new CABLES.Port(op, "create port out", CABLES.OP_PORT_TYPE_DYNAMIC));
+
+const dataStr = op.addInPort(new CABLES.Port(op, "dataStr", CABLES.OP_PORT_TYPE_VALUE, { "display": "readonly" }));
+op.patchId = op.addInPort(new CABLES.Port(op, "patchId", CABLES.OP_PORT_TYPE_VALUE, { "display": "readonly" }));
+
+if (CABLES.UI && CABLES.sandbox.isDevEnv())
+{
+    const inMakeBp = op.inTriggerButton("Create Blueprint");
+    inMakeBp.setUiAttribs({ "hidePort": true });
+
+    inMakeBp.onTriggered = makeBlueprint;
+}
+
+dataStr.setUiAttribs({ "hideParam": true });
+op.patchId.setUiAttribs({ "hideParam": true });
+
+let data = { "ports": [], "portsOut": [] };
+
+// Ops.Ui.Patch.maxPatchId=CABLES.generateUUID();
+
+op.patchId.onChange = function ()
+{
+    const oldPatchOps = op.patch.getSubPatchOps(oldPatchId);
+
+    if (oldPatchOps.length == 2)
+    {
+        for (let i = 0; i < oldPatchOps.length; i++)
+        {
+            op.patch.deleteOp(oldPatchOps[i].id);
+        }
+    }
+    else
+    {
+    }
+};
+
+var oldPatchId = CABLES.generateUUID();
+op.patchId.set(oldPatchId);
+
+op.onLoaded = function ()
+{
+    // op.patchId.set(CABLES.generateUUID());
+};
+
+op.onLoadedValueSet = function ()
+{
+    data = JSON.parse(dataStr.get());
+    if (!data)
+    {
+        data = { "ports": [], "portsOut": [] };
+    }
+    setupPorts();
+};
+
+function loadData()
+{
+}
+
+getSubPatchInputOp();
+getSubPatchOutputOp();
+
+let dataLoaded = false;
+dataStr.onChange = function ()
+{
+    if (dataLoaded) return;
+
+    if (!dataStr.get()) return;
+    try
+    {
+        loadData();
+    }
+    catch (e)
+    {
+        op.logError("cannot load subpatch data...");
+        op.logError(e);
+    }
+};
+
+function saveData()
+{
+    dataStr.set(JSON.stringify(data));
+}
+
+op.saveData = saveData;
+
+function addPortListener(newPort, newPortInPatch)
+{
+    newPort.addEventListener("onUiAttrChange", function (attribs)
+    {
+        if (attribs.title)
+        {
+            let i = 0;
+            for (i = 0; i < data.portsOut.length; i++)
+                if (data.portsOut[i].name == newPort.name)
+                    data.portsOut[i].title = attribs.title;
+
+            for (i = 0; i < data.ports.length; i++)
+                if (data.ports[i].name == newPort.name)
+                    data.ports[i].title = attribs.title;
+
+            saveData();
+        }
+    });
+
+    if (newPort.direction == CABLES.PORT_DIR_IN)
+    {
+        if (newPort.type == CABLES.OP_PORT_TYPE_FUNCTION)
+        {
+            newPort.onTriggered = function ()
+            {
+                if (newPortInPatch.isLinked())
+                    newPortInPatch.trigger();
+            };
+        }
+        else
+        {
+            newPort.onChange = function ()
+            {
+                newPortInPatch.set(newPort.get());
+            };
+        }
+    }
+}
+
+function setupPorts()
+{
+    if (!op.patchId.get()) return;
+    const ports = data.ports || [];
+    const portsOut = data.portsOut || [];
+    let i = 0;
+
+    for (i = 0; i < ports.length; i++)
+    {
+        if (!op.getPortByName(ports[i].name))
+        {
+            const newPort = op.addInPort(new CABLES.Port(op, ports[i].name, ports[i].type));
+
+            const patchInputOp = getSubPatchInputOp();
+            const newPortInPatch = patchInputOp.addOutPort(new CABLES.Port(patchInputOp, ports[i].name, ports[i].type));
+
+            newPort.ignoreValueSerialize = true;
+            newPort.setUiAttribs({ "editableTitle": true });
+            if (ports[i].title)
+            {
+                newPort.setUiAttribs({ "title": ports[i].title });
+                newPortInPatch.setUiAttribs({ "title": ports[i].title });
+            }
+            if (ports[i].objType)
+            {
+                newPort.setUiAttribs({ "objType": ports[i].objType });
+                newPortInPatch.setUiAttribs({ "objType": ports[i].objType });
+            }
+            addPortListener(newPort, newPortInPatch);
+        }
+    }
+
+    for (i = 0; i < portsOut.length; i++)
+    {
+        if (!op.getPortByName(portsOut[i].name))
+        {
+            const newPortOut = op.addOutPort(new CABLES.Port(op, portsOut[i].name, portsOut[i].type));
+            const patchOutputOp = getSubPatchOutputOp();
+            const newPortOutPatch = patchOutputOp.addInPort(new CABLES.Port(patchOutputOp, portsOut[i].name, portsOut[i].type));
+
+            newPortOut.ignoreValueSerialize = true;
+            newPortOut.setUiAttribs({ "editableTitle": true });
+
+            if (portsOut[i].title)
+            {
+                newPortOut.setUiAttribs({ "title": portsOut[i].title });
+                newPortOutPatch.setUiAttribs({ "title": portsOut[i].title });
+            }
+            if (portsOut[i].objType)
+            {
+                newPortOut.setUiAttribs({ "objType": portsOut[i].objType });
+                newPortOutPatch.setUiAttribs({ "objType": portsOut[i].objType });
+            }
+
+            // addPortListener(newPortOut,newPortOutPatch);
+            addPortListener(newPortOutPatch, newPortOut);
+        }
+    }
+
+    dataLoaded = true;
+}
+
+op.addNewInPort = function (otherPort, type, objType)
+{
+    const newName = "in" + data.ports.length + " " + otherPort.parent.name + " " + otherPort.name;
+
+    const o = { "name": newName, "type": otherPort.type };
+    if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
+
+    data.ports.push(o);
+    setupPorts();
+    return newName;
+};
+
+op.dyn.onLinkChanged = function ()
+{
+    if (op.dyn.isLinked())
+    {
+        const otherPort = op.dyn.links[0].getOtherPort(op.dyn);
+        op.dyn.removeLinks();
+        otherPort.removeLinkTo(op.dyn);
+
+        op.log("dyn link changed!!!");
+
+        // const newName = "in" + data.ports.length + " " + otherPort.parent.name + " " + otherPort.name;
+
+        // const o = { "name": newName, "type": otherPort.type };
+        // if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
+        // data.ports.push(o);
+
+        // setupPorts();
+
+        const newName = op.addNewInPort(otherPort);
+
+        const l = gui.scene().link(
+            otherPort.parent,
+            otherPort.getName(),
+            op,
+            newName
+        );
+
+        dataLoaded = true;
+        saveData();
+    }
+    else
+    {
+        setTimeout(function ()
+        {
+            op.dyn.removeLinks();
+        }, 100);
+    }
+};
+
+op.addNewOutPort = function (otherPort, type, objType)
+{
+    const newName = "out" + data.portsOut.length + " " + otherPort.parent.name + " " + otherPort.name;
+
+    const o = { "name": newName, "type": otherPort.type };
+    if (otherPort.uiAttribs.objType)o.objType = otherPort.uiAttribs.objType;
+
+    data.portsOut.push(o);
+    setupPorts();
+    return newName;
+};
+
+op.dynOut.onLinkChanged = function ()
+{
+    if (op.dynOut.isLinked())
+    {
+        const otherPort = op.dynOut.links[0].getOtherPort(op.dynOut);
+        op.dynOut.removeLinks();
+        otherPort.removeLinkTo(op.dynOut);
+
+        const newName = op.addNewOutPort(otherPort);
+
+        gui.scene().link(
+            otherPort.parent,
+            otherPort.getName(),
+            op,
+            newName
+        );
+
+        dataLoaded = true;
+        saveData();
+    }
+    else
+    {
+        setTimeout(function ()
+        {
+            op.dynOut.removeLinks();
+        }, 100);
+
+        op.log("dynOut unlinked...");
+    }
+};
+
+function getSubPatchOutputOp()
+{
+    let patchOutputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchOutput");
+
+    if (!patchOutputOP)
+    {
+        op.patch.addOp("Ops.Ui.PatchOutput", { "subPatch": op.patchId.get() });
+        patchOutputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchOutput");
+
+        if (!patchOutputOP) op.warn("no patchinput2!");
+    }
+    return patchOutputOP;
+}
+
+function getSubPatchInputOp()
+{
+    let patchInputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchInput");
+
+    if (!patchInputOP)
+    {
+        op.patch.addOp("Ops.Ui.PatchInput", { "subPatch": op.patchId.get() });
+        patchInputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchInput");
+        if (!patchInputOP) op.warn("no patchinput2!");
+    }
+
+    return patchInputOP;
+}
+
+op.addSubLink = function (p, p2)
+{
+    const num = data.ports.length;
+    const sublPortname = "in" + (num - 1) + " " + p2.parent.name + " " + p2.name;
+
+    if (p.direction == CABLES.PORT_DIR_IN)
+    {
+        gui.scene().link(
+            p.parent,
+            p.getName(),
+            getSubPatchInputOp(),
+            sublPortname
+        );
+    }
+    else
+    {
+        gui.scene().link(
+            p.parent,
+            p.getName(),
+            getSubPatchOutputOp(),
+            "out" + (num) + " " + p2.parent.name + " " + p2.name
+        );
+    }
+
+    const bounds = gui.patchView.getSubPatchBounds(op.patchId.get());
+    op.log("subpatchbounds", bounds);
+    getSubPatchInputOp().uiAttr(
+        {
+            "translate":
+            {
+                "x": bounds.minx,
+                "y": bounds.miny - 100
+            }
+        });
+
+    getSubPatchOutputOp().uiAttr(
+        {
+            "translate":
+            {
+                "x": bounds.minx,
+                "y": bounds.maxy + 100
+            }
+        });
+    saveData();
+    return sublPortname;
+};
+
+op.onDelete = function ()
+{
+    for (let i = op.patch.ops.length - 1; i >= 0; i--)
+    {
+        if (op.patch.ops[i] && op.patch.ops[i].uiAttribs && op.patch.ops[i].uiAttribs.subPatch == op.patchId.get())
+        {
+            op.patch.deleteOp(op.patch.ops[i].id);
+        }
+    }
+};
+
+function makeBlueprint()
+{
+    const bpOp = op.patch.addOp(CABLES.UI.DEFAULTOPNAMES.blueprint);
+
+    bpOp.getPortByName("externalPatchId").set(gui.patchId);
+    bpOp.getPortByName("subPatchId").set(op.patchId.get());
+    bpOp.getPortByName("active").set(true);
+
+    bpOp.uiAttr(
+        {
+            "translate":
+            {
+                "x": op.uiAttribs.translate.x - 150,
+                "y": op.uiAttribs.translate.y
+            }
+        });
+}
+
+
+};
+
+Ops.Ui.SubPatch.prototype = new CABLES.Op();
+CABLES.OPS["84d9a6f0-ed7a-466d-b386-225ed9e89c60"]={f:Ops.Ui.SubPatch,objName:"Ops.Ui.SubPatch"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Html.AppendChild_v2
+// 
+// **************************************************************
+
+Ops.Html.AppendChild_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+// constants
+let CANVAS_ELEMENT = op.patch.cgl.canvas.parentElement;
+
+// variables
+let lastParent = null;
+let lastChild = null;
+
+// inputs
+let parentPort = op.inObject("Parent", null, "element");
+let childPort = op.inObject("Child", null, "element");
+
+// outputs
+let parentOutPort = op.outObject("Parent Out", null, "element");
+let childOutPort = op.outObject("Child Out", null, "element");
+
+// change listeners
+parentPort.onChange = update;
+childPort.onChange = update;
+
+// functions
+
+function update()
+{
+    let parent = parentPort.get();
+    let child = childPort.get();
+    if (parent !== lastParent)
+    {
+        if (parent)
+        {
+            handleParentConnect(parent, child);
+        }
+        else
+        {
+            handleParentDisconnect(parent, child);
+        }
+        lastParent = parent;
+    }
+    if (child !== lastChild)
+    {
+        if (child)
+        {
+            handleChildConnect(parent, child);
+        }
+        else
+        {
+            handleChildDisconnect(parent, child);
+        }
+        lastChild = child;
+    }
+    parentOutPort.set(parent);
+    childOutPort.set(child);
+}
+
+function handleParentConnect(parent, child)
+{
+    if (child)
+    {
+        parent.appendChild(child);
+    }
+}
+
+function handleParentDisconnect(parent, child)
+{
+    if (child)
+    {
+        CANVAS_ELEMENT.appendChild(child); // if there is no parent, append to patch
+    }
+}
+
+function handleChildConnect(parent, child)
+{
+    if (parent)
+    {
+        parent.appendChild(child);
+    }
+}
+
+function handleChildDisconnect(parent, child)
+{
+    if (lastChild)
+    {
+        CANVAS_ELEMENT.appendChild(lastChild);
+    }
+}
+
+
+};
+
+Ops.Html.AppendChild_v2.prototype = new CABLES.Op();
+CABLES.OPS["e15cfbc7-d2fa-4348-8964-66d02aec77aa"]={f:Ops.Html.AppendChild_v2,objName:"Ops.Html.AppendChild_v2"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.ChromaticAberration_v2
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.ChromaticAberration_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"chromatic_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI float pixel;\nUNI float onePixel;\nUNI float amount;\nUNI float lensDistort;\n\n#ifdef MASK\nUNI sampler2D texMask;\n#endif\n\n{{CGL.BLENDMODES3}}\n\nvoid main()\n{\n   vec4 base=texture(tex,texCoord);\n   vec4 col=texture(tex,texCoord);\n\n   vec2 tc=texCoord;;\n   float pix = pixel;\n   if(lensDistort>0.0)\n   {\n       float dist = distance(texCoord, vec2(0.5,0.5));\n       tc-=0.5;\n       tc *=smoothstep(-0.9,1.0*lensDistort,1.0-dist);\n       tc+=0.5;\n   }\n\n    #ifdef MASK\n        vec4 m=texture(texMask,texCoord);\n        pix*=m.r*m.a;\n    #endif\n\n    #ifdef SMOOTH\n    #ifdef WEBGL2\n        float numSamples=round(pix/onePixel/4.0+1.0);\n        col.r=0.0;\n        col.b=0.0;\n\n        for(float off=0.0;off<numSamples;off++)\n        {\n            float diff=(pix/numSamples)*off;\n            col.r+=texture(tex,vec2(tc.x+diff,tc.y)).r/numSamples;\n            col.b+=texture(tex,vec2(tc.x-diff,tc.y)).b/numSamples;\n        }\n    #endif\n    #endif\n\n    #ifndef SMOOTH\n        col.r=texture(tex,vec2(tc.x+pix,tc.y)).r;\n        col.b=texture(tex,vec2(tc.x-pix,tc.y)).b;\n    #endif\n\n   outColor= cgl_blendPixel(base,col,amount);\n\n}\n",};
+const
+    render=op.inTrigger('render'),
+    blendMode=CGL.TextureEffect.AddBlendSelect(op,"Blend Mode","normal"),
+    amount=op.inValueSlider("Amount",1),
+    pixel=op.inValue("Pixel",5),
+    lensDistort=op.inValueSlider("Lens Distort",0),
+    doSmooth=op.inValueBool("Smooth",false),
+    textureMask=op.inTexture("Mask"),
+    trigger=op.outTrigger('trigger');
+
+const cgl=op.patch.cgl;
+const shader=new CGL.Shader(cgl,"chromatic");
+
+CGL.TextureEffect.setupBlending(op,shader,blendMode,amount);
+
+shader.setSource(shader.getDefaultVertexShader(),attachments.chromatic_frag);
+const textureUniform=new CGL.Uniform(shader,'t','tex',0),
+    uniPixel=new CGL.Uniform(shader,'f','pixel',0),
+    uniOnePixel=new CGL.Uniform(shader,'f','onePixel',0),
+    unitexMask=new CGL.Uniform(shader,'t','texMask',1),
+    uniAmount=new CGL.Uniform(shader,'f','amount',amount),
+    unilensDistort=new CGL.Uniform(shader,'f','lensDistort',lensDistort);
+
+doSmooth.onChange=function()
+{
+    if(doSmooth.get())shader.define("SMOOTH");
+    else shader.removeDefine("SMOOTH");
+};
+
+textureMask.onChange=function()
+{
+    if(textureMask.get())shader.define("MASK");
+    else shader.removeDefine("MASK");
+};
+
+render.onTriggered=function()
+{
+    if(!CGL.TextureEffect.checkOpInEffect(op,3)) return;
+
+    var texture=cgl.currentTextureEffect.getCurrentSourceTexture();
+
+    uniPixel.setValue(pixel.get()*(1/texture.width));
+    uniOnePixel.setValue(1/texture.width);
+
+    cgl.pushShader(shader);
+    cgl.currentTextureEffect.bind();
+
+    cgl.setTexture(0, texture.tex );
+
+    if(textureMask.get()) cgl.setTexture(1, textureMask.get().tex );
+
+    cgl.currentTextureEffect.finish();
+    cgl.popShader();
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.ChromaticAberration_v2.prototype = new CABLES.Op();
+CABLES.OPS["07701f81-1a98-44c0-b1ef-592db3cbb5d3"]={f:Ops.Gl.TextureEffects.ChromaticAberration_v2,objName:"Ops.Gl.TextureEffects.ChromaticAberration_v2"};
+
+
+
+
+// **************************************************************
+// 
 // Ops.User.mick.GoogleAnalytics
 // 
 // **************************************************************
@@ -32694,6 +31844,7 @@ const outLoaded = op.outBool("Loaded");
 const outConsent = op.outBool('Consent ok');
 const outShowBanner = op.outBool('Show banner');
 
+outShowBanner.set(true);
 
 const COOKIE_NAME = "cables_google_analytics_consent";
 
@@ -32710,6 +31861,7 @@ function loadScript(callback) {
 
 function doNotConsent() {
     console.log("doNotConsent");
+    deleteCookie();
     if (!window.hasOwnProperty('gtag')) {
         console.error('Load Google Analytics first');
         outConsent.set(false);
@@ -32718,6 +31870,29 @@ function doNotConsent() {
     window.gtag('consent', 'default', {
       'ad_storage': 'denied',
       'analytics_storage': 'denied'
+    });
+}
+
+function doLoadAndConsent() {
+    if (!inGID.get()) {
+        console.error('Empty GA_MEASUREMENT_ID');
+        return;
+    }
+
+    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
+        console.log('Google Analytics loaded');
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = () => {window.dataLayer.push(arguments); }
+
+        window.gtag('js', new Date());
+        window.gtag('config', inGID.get());
+
+        doConsent();
+
+        outConsent.set(true);
+        outShowBanner.set(true);
+        outLoaded.set(true);
+        outTrigger.trigger();
     });
 }
 
@@ -32809,13 +31984,13 @@ inLoad.onTriggered = () => {
             case 'consent':
                 doConsent();
                 outConsent.set(true);
-                outShowBanner.set(false);
+                outShowBanner.set(true);
                 break;
             case 'donotconsent':
                 doNotConsent();
                 // setAnalyticsCookie(false);
                 outConsent.set(false);
-                outShowBanner.set(false);
+                outShowBanner.set(true);
                 break;
 
             default:
@@ -32827,7 +32002,7 @@ inLoad.onTriggered = () => {
 };
 
 inConsent.onTriggered = () => {
-    doConsent();
+    doLoadAndConsent();
     setAnalyticsCookie(true);
     outConsent.set(true);
     outShowBanner.set(false);
@@ -32835,7 +32010,8 @@ inConsent.onTriggered = () => {
 
 inRevokeConsent.onTriggered = () => {
     doNotConsent()
-    setAnalyticsCookie(false);
+    //setAnalyticsCookie(false);
+    deleteCookie();
     outConsent.set(false);
     outShowBanner.set(false);
 }
@@ -32858,6 +32034,1203 @@ inDisableAnalytics.onTriggered = () => {
 
 Ops.User.mick.GoogleAnalytics.prototype = new CABLES.Op();
 
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.ScaleTexture_v2
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.ScaleTexture_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"scale_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI sampler2D multiplierTex;\nUNI float amount;\nUNI float uScaleX,uScaleY;\nUNI float offsetX,offsetY;\nUNI float centerX,centerY;\n\n{{CGL.BLENDMODES3}}\n\nvoid main()\n{\n    float multiplier = 1.0;\n    vec2 uv = texCoord;\n\n    #ifdef MASK_SCALE\n        multiplier = dot(vec3(0.2126,0.7152,0.0722), texture(multiplierTex,texCoord).rgb);\n    #endif\n\n    uv.x = (uv.x - centerX) / (uScaleX * multiplier)  + centerX+offsetX ;\n    uv.y = (uv.y - centerY) / (uScaleY * multiplier)  + centerY+offsetY ;\n\n    vec4 col = texture(tex,uv);\n    vec4 base = texture(tex,texCoord);\n    float a=amount;\n\n    #ifdef CLEAR\n        base=vec4(0.0,0.0,0.0,0.0);\n    #endif\n\n    outColor=cgl_blendPixel(base,col,a);\n\n    if(uv.x>1.0||uv.y>1.0||uv.x<0.0||uv.y<0.0)\n        outColor.a=0.0;\n\n}\n",};
+const
+    render = op.inTrigger("render"),
+    multiplierTex = op.inTexture("Multiplier"),
+    blendMode = CGL.TextureEffect.AddBlendSelect(op, "Blend Mode", "normal"),
+    amount = op.inValueSlider("Amount", 1),
+    scaleX = op.inValue("Scale X", 1.5),
+    scaleY = op.inValue("Scale Y", 1.5),
+    offsetX = op.inFloat("offset X", 0),
+    offsetY = op.inFloat("offset Y", 0),
+    centerX = op.inFloat("center X", 0.5),
+    centerY = op.inFloat("center Y", 0.5),
+    inClear = op.inBool("Clear", true),
+    trigger = op.outTrigger("trigger");
+
+const cgl = op.patch.cgl;
+const shader = new CGL.Shader(cgl, op.name);
+
+shader.setSource(shader.getDefaultVertexShader(), attachments.scale_frag);
+
+const
+    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
+    textureMultiplierUniform = new CGL.Uniform(shader, "t", "multiplierTex", 1),
+    amountUniform = new CGL.Uniform(shader, "f", "amount", amount),
+    scaleXUniform = new CGL.Uniform(shader, "f", "uScaleX", scaleX),
+    scaleYUniform = new CGL.Uniform(shader, "f", "uScaleY", scaleY),
+    centerXUniform = new CGL.Uniform(shader, "f", "centerX", centerX),
+    centerYUniform = new CGL.Uniform(shader, "f", "centerY", centerY),
+    offsetXUniform = new CGL.Uniform(shader, "f", "offsetX", offsetX),
+    offsetYUniform = new CGL.Uniform(shader, "f", "offsetY", offsetY);
+
+CGL.TextureEffect.setupBlending(op, shader, blendMode, amount);
+
+inClear.onChange =
+multiplierTex.onChange = function ()
+{
+    shader.toggleDefine("MASK_SCALE", multiplierTex.isLinked());
+    shader.toggleDefine("CLEAR", inClear.get());
+};
+
+render.onTriggered = function ()
+{
+    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
+
+    cgl.pushShader(shader);
+    cgl.currentTextureEffect.bind();
+
+    cgl.setTexture(0, cgl.currentTextureEffect.getCurrentSourceTexture().tex);
+
+    if (multiplierTex.get()) cgl.setTexture(1, multiplierTex.get().tex);
+
+    cgl.currentTextureEffect.finish();
+    cgl.popShader();
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.ScaleTexture_v2.prototype = new CABLES.Op();
+CABLES.OPS["942ef040-9be9-4848-9122-61cb28cb7789"]={f:Ops.Gl.TextureEffects.ScaleTexture_v2,objName:"Ops.Gl.TextureEffects.ScaleTexture_v2"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.TextureEffects.ToNormalMap_v2
+// 
+// **************************************************************
+
+Ops.Gl.TextureEffects.ToNormalMap_v2 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"tonormal_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI vec2 size;\nUNI float strength;\nUNI float sizeMul;\n\nvoid main()\n{\n    float tl = abs(texture(tex, texCoord + (size*sizeMul) * vec2(-1.0, -1.0)).x);   // top left\n    float  l = abs(texture(tex, texCoord + (size*sizeMul) * vec2(-1.0,  0.0)).x);   // left\n    float bl = abs(texture(tex, texCoord + (size*sizeMul) * vec2(-1.0,  1.0)).x);   // bottom left\n    float  t = abs(texture(tex, texCoord + (size*sizeMul) * vec2( 0.0, -1.0)).x);   // top\n    float  b = abs(texture(tex, texCoord + (size*sizeMul) * vec2( 0.0,  1.0)).x);   // bottom\n    float tr = abs(texture(tex, texCoord + (size*sizeMul) * vec2( 1.0, -1.0)).x);   // top right\n    float  r = abs(texture(tex, texCoord + (size*sizeMul) * vec2( 1.0,  0.0)).x);   // right\n    float br = abs(texture(tex, texCoord + (size*sizeMul) * vec2( 1.0,  1.0)).x);   // bottom right\n\n    // Compute dx using Sobel:\n    //           -1 0 1\n    //           -2 0 2\n    //           -1 0 1\n    float dX = tr + 2.0*r + br -tl - 2.0*l - bl;\n\n    // Compute dy using Sobel:\n    //           -1 -2 -1\n    //            0  0  0\n    //            1  2  1\n    float dY = bl + 2.0*b + br -tl - 2.0*t - tr;\n\n    // Build the normalized normal\n    vec4 N = vec4(normalize(vec3(dX,dY, 1.0 / strength)), 1.0);\n    N= N * 0.5 + 0.5;\n\n    outColor= N;\n}",};
+const
+    render = op.inTrigger("render"),
+    trigger = op.outTrigger("trigger"),
+    strength = op.inValue("Strength", 4),
+    sizeMul = op.inValue("Step Multiplier", 1);
+
+const
+    cgl = op.patch.cgl,
+    shader = new CGL.Shader(cgl, op.name);
+
+// from: https://forum.openframeworks.cc/t/compute-normal-map-from-image/1400/11
+shader.setSource(shader.getDefaultVertexShader(), attachments.tonormal_frag);
+
+const
+    textureUniform = new CGL.Uniform(shader, "t", "tex", 0),
+    uniStrength = new CGL.Uniform(shader, "f", "strength", strength),
+    unisizeMul = new CGL.Uniform(shader, "f", "sizeMul", sizeMul),
+    uniSize = new CGL.Uniform(shader, "2f", "size", 0,0);
+
+render.onTriggered = function ()
+{
+    if (!CGL.TextureEffect.checkOpInEffect(op)) return;
+
+    cgl.pushShader(shader);
+    cgl.currentTextureEffect.bind();
+
+    const effectTex=cgl.currentTextureEffect.getCurrentSourceTexture();
+
+    cgl.setTexture(0, effectTex.tex);
+
+    uniSize.setValue([1/effectTex.width,1/effectTex.height]);
+
+    cgl.currentTextureEffect.finish();
+    cgl.popShader();
+
+    trigger.trigger();
+};
+
+
+};
+
+Ops.Gl.TextureEffects.ToNormalMap_v2.prototype = new CABLES.Op();
+CABLES.OPS["5dfb2856-b589-4bd9-8f4e-b518da115d11"]={f:Ops.Gl.TextureEffects.ToNormalMap_v2,objName:"Ops.Gl.TextureEffects.ToNormalMap_v2"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.Meshes.SimpleSpline
+// 
+// **************************************************************
+
+Ops.Gl.Meshes.SimpleSpline = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    render = op.inTrigger("Render"),
+    inPoints = op.inArray("Points"),
+    numPoints = op.inValueInt("Num Points"),
+    strip = op.inBool("Line Strip", true),
+    outGeom = op.outObject("Geometry"),
+    // a=op.inSwitch("Mode",["Line Strip","Line Loop","Lines"]), // next version!
+    texCoords = op.inSwitch("TexCoords", ["0", "0-1", "Random", "Fill"], "0"),
+    inTexCoords = op.inArray("TexCoords Array"),
+    inVertCols = op.inArray("Vertex Colors"),
+    next = op.outTrigger("Next");
+
+const cgl = op.patch.cgl;
+const geom = new CGL.Geometry("simplespline");
+outGeom.set(geom);
+
+geom.vertices = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+const mesh = new CGL.Mesh(cgl, geom);
+let buff = new Float32Array();
+let bufTexCoord = new Float32Array();
+let bufNorms = new Float32Array();
+let needsRebuild = true;
+let attr;
+let currentTexCoords = "";
+
+inVertCols.onChange =
+inTexCoords.onChange =
+texCoords.onChange =
+    numPoints.onChange =
+    inPoints.onChange =
+    function () { needsRebuild = true; };
+
+op.toWorkPortsNeedToBeLinked(inPoints);
+
+function rebuild()
+{
+    const points = inPoints.get();
+
+    if (!points || points.length === 0) return;
+
+    const newLength = points.length;
+
+    if (!(points instanceof Float32Array))
+    {
+        if (newLength != buff.length)
+        {
+            buff = new Float32Array(newLength);
+            bufNorms = new Float32Array(newLength);
+            mesh.setAttribute(CGL.SHADERVAR_VERTEX_NORMAL, bufNorms, 3);
+
+            buff.set(points);
+        }
+        else
+        {
+            buff.set(points);
+        }
+    }
+    else
+    {
+        buff = points;
+    }
+
+    attr = mesh.setAttribute(CGL.SHADERVAR_VERTEX_POSITION, buff, 3);
+
+    if (inVertCols.get())
+    {
+        const attrTc = mesh.setAttribute(CGL.SHADERVAR_VERTEX_COLOR || "attrVertColor", inVertCols.get(), 4);
+    }
+
+    const numTc = (newLength / 3) * 2;
+
+    if (inTexCoords.get())
+    {
+        const intc = inTexCoords.get();
+        const attrTc = mesh.setAttribute(CGL.SHADERVAR_VERTEX_TEXCOORD, intc, 2);
+    }
+    else
+    if (currentTexCoords != texCoords.get() || mesh.getAttribute(CGL.SHADERVAR_VERTEX_TEXCOORD).numItems != numTc / 2)
+    {
+        currentTexCoords = texCoords.get();
+
+        if (bufTexCoord.length != numTc) bufTexCoord = new Float32Array(numTc);
+
+        if (texCoords.get() == "0-1")
+        {
+            for (let i = 0; i < numTc; i += 2)
+            {
+                bufTexCoord[i] = i / numTc;
+                // bufTexCoord[i+1] = i / numTc;
+                bufTexCoord[i + 1] = 0.5;
+            }
+        }
+        else if (texCoords.get() == "Fill")
+        {
+            const sizel = Math.sqrt(numTc / 2);
+
+            let idx = 0;
+            for (let j = 0; j < sizel; j++)
+            {
+                for (let i = 0; i < sizel; i++)
+                {
+                    idx++;
+                    bufTexCoord[idx * 2 + 0] = i / sizel;
+                    bufTexCoord[idx * 2 + 1] = j / sizel;
+                }
+            }
+        }
+        else if (texCoords.get() == "Random")
+        {
+            for (let i = 0; i < numTc; i += 2)
+            {
+                bufTexCoord[i] = Math.random();
+                bufTexCoord[i + 1] = Math.random();
+            }
+        }
+        else
+        {
+            for (let i = 0; i < numTc; i += 2)
+            {
+                bufTexCoord[i] = 0;
+                bufTexCoord[i + 1] = 0;
+            }
+        }
+        const attrTc = mesh.setAttribute(CGL.SHADERVAR_VERTEX_TEXCOORD, bufTexCoord, 2);
+    }
+
+    needsRebuild = false;
+}
+
+render.onTriggered = function ()
+{
+    if (!inPoints.get()) return;
+
+    if (needsRebuild)rebuild();
+    const shader = cgl.getShader();
+    if (!shader) return;
+
+    const oldPrim = shader.glPrimitive;
+    if (strip.get()) shader.glPrimitive = cgl.gl.LINE_STRIP; // LINE_LOOP
+    else shader.glPrimitive = cgl.gl.LINES;
+
+    if (attr)
+        if (numPoints.get() <= 0)attr.numItems = buff.length / 3;
+        else attr.numItems = Math.min(numPoints.get(), buff.length / 3);
+
+    if (mesh && buff.length !== 0) mesh.render(shader);
+
+    shader.glPrimitive = oldPrim;
+
+    next.trigger();
+};
+
+
+};
+
+Ops.Gl.Meshes.SimpleSpline.prototype = new CABLES.Op();
+CABLES.OPS["af3fd0e8-ef3d-4124-a6ee-3482e9a85b45"]={f:Ops.Gl.Meshes.SimpleSpline,objName:"Ops.Gl.Meshes.SimpleSpline"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Libs.Mediapipe.MpHandCoordinate
+// 
+// **************************************************************
+
+Ops.Libs.Mediapipe.MpHandCoordinate = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+
+// https://google.github.io/mediapipe/solutions/hands.html
+
+const marks=["WRIST","THUMB_CMC","THUMB_MCP","THUMB_IP","THUMB_TIP","INDEX_FINGER_MCP","INDEX_FINGER_PIP","INDEX_FINGER_DIP","INDEX_FINGER_TIP","MIDDLE_FINGER_MCP","MIDDLE_FINGER_PIP","MIDDLE_FINGER_DIP","MIDDLE_FINGER_TIP","RING_FINGER_MCP","RING_FINGER_PIP","RING_FINGER_DIP","RING_FINGER_TIP","PINKY_MCP","PINKY_PIP","PINKY_DIP","PINKY_TIP"];
+
+const
+    inHand=op.inArray("Hand Points"),
+    inWhich=op.inDropDown("Joint",marks,"WRIST"),
+    outX=op.outNumber("X"),
+    outY=op.outNumber("Y"),
+    outZ=op.outNumber("Z");
+
+let idx=0;
+
+inWhich.onChange=()=>
+{
+    idx=marks.indexOf(inWhich.get());
+    update();
+};
+
+inHand.onChange=update;
+
+function update()
+{
+    const arr=inHand.get();
+
+    if(arr && arr.length>idx*3)
+    {
+        outX.set(arr[idx*3+0]);
+        outY.set(arr[idx*3+1]);
+        outZ.set(arr[idx*3+2]);
+    }
+
+}
+
+};
+
+Ops.Libs.Mediapipe.MpHandCoordinate.prototype = new CABLES.Op();
+CABLES.OPS["d3adef3d-5c99-48fd-86f0-48ec4a290afb"]={f:Ops.Libs.Mediapipe.MpHandCoordinate,objName:"Ops.Libs.Mediapipe.MpHandCoordinate"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Libs.Mediapipe.MpHandTracking
+// 
+// **************************************************************
+
+Ops.Libs.Mediapipe.MpHandTracking = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+// todo: warn if ele not dom object , e..g. texture!
+
+const
+    inEle = op.inObject("Element", null, "element"),
+    inMinConfDetect = op.inFloatSlider("Min Confidence Detect", 0.5),
+    inMinConfTrack = op.inFloatSlider("Min Confidence Tracking", 0.5),
+
+    outResult = op.outObject("Result"),
+    outFound = op.outNumber("Found Hands");
+
+const hands = new Hands({ "locateFile": (file) =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.1/${file}` });
+
+let camera = null;
+updateOptions();
+
+inMinConfTrack.onChange =
+    inMinConfDetect.onChange = updateOptions;
+
+inEle.onChange = () =>
+{
+    if (!inEle.get()) return;
+
+    // if(inEle.get())
+    // console.log(inEle.get().videoWidth,inEle.get().videoHeight);
+
+    // op.log("init camera");
+    camera = new Camera(inEle.get(), {
+        "onFrame": async () =>
+        {
+            const ele = inEle.get();
+
+            if (ele) await hands.send({ "image": ele });
+        },
+        "width": inEle.get().width,
+        "height": inEle.get().height
+    });
+    camera.start();
+};
+
+function updateOptions()
+{
+    hands.setOptions({
+        "maxNumHands": 2,
+        "minDetectionConfidence": inMinConfDetect.get(),
+        "minTrackingConfidence": inMinConfTrack.get()
+    });
+}
+
+hands.onResults((r) =>
+{
+    // let points = [];
+    // let points2 = [];
+    // let lines = null;
+    // let lines2 = null;
+
+    if (r && r.multiHandedness)
+    {
+        outFound.set(r.multiHandedness.length);
+    }
+    else
+    {
+        outFound.set(0);
+    }
+
+    // // console.log(r);
+
+    // if (r && r.multiHandLandmarks && r.multiHandLandmarks[0])
+    // {
+    //     for (let i = 0; i < r.multiHandLandmarks[0].length; i++)
+    //     {
+    //         points[i * 3] = (r.multiHandLandmarks[0][i].x - 0.5) * 2.0 * 1.3333;
+    //         points[i * 3 + 1] = -1 * (r.multiHandLandmarks[0][i].y - 0.5) * 2.0;
+    //         points[i * 3 + 2] = 0;
+    //     }
+    //     lines = getLines(points);
+
+    //     outPoints.set(points);
+    //     outLines.set(lines);
+    // }
+    // else
+    // {
+    //     outPoints.set(null);
+    //     outLines.set(null);
+    // }
+
+    // if (r && r.multiHandLandmarks && r.multiHandLandmarks[1])
+    // {
+    //     for (let i = 0; i < r.multiHandLandmarks[1].length; i++)
+    //     {
+    //         points2[i * 3] = (r.multiHandLandmarks[1][i].x - 0.5) * 2.0 * 1.3333;
+    //         points2[i * 3 + 1] = -1 * (r.multiHandLandmarks[1][i].y - 0.5) * 2.0;
+    //         points2[i * 3 + 2] = 0;
+    //     }
+    //     lines2 = getLines(points2);
+
+    //     outPoints2.set(points2);
+    //     outLines2.set(lines2);
+    // }
+    // else
+    // {
+    //     outPoints2.set(null);
+    //     outLines2.set(null);
+    // }
+
+    outResult.set(r);
+});
+
+
+};
+
+Ops.Libs.Mediapipe.MpHandTracking.prototype = new CABLES.Op();
+CABLES.OPS["5251e50f-abaf-4ca3-a809-61f8ca58ec35"]={f:Ops.Libs.Mediapipe.MpHandTracking,objName:"Ops.Libs.Mediapipe.MpHandTracking"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Gl.Textures.WebcamTexture_v3
+// 
+// **************************************************************
+
+Ops.Gl.Textures.WebcamTexture_v3 = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"texcopy_frag":"UNI sampler2D tex;\nIN vec2 texCoord;\n\n\nvoid main()\n{\n    vec2 tc=vec2(texCoord.x,texCoord.y);\n\n    #ifdef FLIPX\n        tc.x=1.0-texCoord.x;\n    #endif\n    #ifdef FLIPY\n        tc.y=1.0-texCoord.y;\n    #endif\n    outColor=texture(tex,tc);\n}",};
+const
+    inTrigger = op.inTrigger("Render"),
+    inActive = op.inBool("Active", true),
+    inGenTex = op.inValueBool("Generate Texture", true),
+    inInputDevices = op.inDropDown("Webcam Input", ["Default"], "Default"),
+    // inFacing = op.inSwitch("Facing", ["environment", "user"], "environment"),
+    inWidth = op.inValueInt("Requested Width", 1280),
+    inHeight = op.inValueInt("Requested Height", 720),
+
+    flipX = op.inValueBool("Flip X", false),
+    flipY = op.inValueBool("Flip Y", false),
+
+    inAsDOM = op.inValueBool("Show HTML Element", false),
+    inCss = op.inStringEditor("CSS", "z-index:99999;position:absolute;"),
+    htmlFlipX = op.inValueBool("Element Flip X", false),
+    htmlFlipY = op.inValueBool("Element Flip Y", false),
+
+    next = op.outTrigger("Next"),
+    textureOut = op.outTexture("Texture"),
+
+    outRatio = op.outNumber("Ratio"),
+    available = op.outBool("Available"),
+    outWidth = op.outNumber("Size Width"),
+    outHeight = op.outNumber("Size Height"),
+    outError = op.outString("Error"),
+    outElement = op.outObject("HTML Element", null, "element"),
+    outDevices = op.outArray("Available devices"),
+    outSelectedDevice = op.outString("Active device"),
+    outUpdate = op.outTrigger("Texture updated");
+
+op.setPortGroup("Camera", [inInputDevices, inWidth, inHeight]);
+op.setPortGroup("Texture", [flipX, flipY]);
+op.setPortGroup("Video Element", [inAsDOM, inCss, htmlFlipX, htmlFlipY]);
+
+let tries = 0;
+const cgl = op.patch.cgl;
+const emptyTexture = CGL.Texture.getEmptyTexture(cgl);
+const videoElement = document.createElement("video");
+const eleId = "webcam" + op.id;
+
+videoElement.setAttribute("id", eleId);
+videoElement.setAttribute("autoplay", "");
+videoElement.setAttribute("muted", "");
+videoElement.setAttribute("playsinline", "");
+videoElement.setAttribute("style", inCss.get());
+op.patch.cgl.canvas.parentElement.appendChild(videoElement);
+
+let tex = null;
+let initingDevices = false;
+let restarting = false;
+let started = false;
+let camsLoaded = false;
+let loadingId = null;
+let currentStream = null;
+let camInputDevices = null;
+let active = false;
+let alreadyRetried = false;
+let constraints = null;
+
+textureOut.set(emptyTexture);
+
+flipX.onChange =
+flipY.onChange = initCopyShader;
+
+inInputDevices.onChange =
+    inWidth.onChange =
+    inHeight.onChange = restartWebcam;
+htmlFlipX.onChange = htmlFlipY.onChange = flipVideoElement;
+op.onDelete = removeElement;
+inAsDOM.onChange = inCss.onChange = updateStyle;
+
+initTexture();
+updateStyle();
+initDevices();
+
+let tc = null;
+
+function initCopyShader()
+{
+    if (!tc)tc = new CGL.CopyTexture(cgl, "webcamFlippedTexture", { "shader": attachments.texcopy_frag });
+    tc.bgShader.toggleDefine("FLIPX", flipX.get());
+    tc.bgShader.toggleDefine("FLIPY", !flipY.get());
+}
+
+function initTexture()
+{
+    if (tex)tex.delete();
+    tex = new CGL.Texture(cgl, { "name": "webcam" });
+    if (videoElement) tex.setSize(videoElement.videoWidth, videoElement.videoHeight);
+}
+
+function removeElement()
+{
+    if (videoElement) videoElement.remove();
+}
+
+function updateStyle()
+{
+    if (!inAsDOM.get()) videoElement.setAttribute("style", "display:none;");
+    else videoElement.setAttribute("style", inCss.get());
+
+    inCss.setUiAttribs({ "greyout": !inAsDOM.get() });
+    htmlFlipX.setUiAttribs({ "greyout": !inAsDOM.get() });
+    htmlFlipY.setUiAttribs({ "greyout": !inAsDOM.get() });
+}
+
+function flipVideoElement()
+{
+    if (htmlFlipX.get() && !htmlFlipY.get()) videoElement.style.transform = "scaleX(-1)";
+    else if (!htmlFlipX.get() && htmlFlipY.get()) videoElement.style.transform = "scaleY(-1)";
+    else if (htmlFlipX.get() && htmlFlipY.get()) videoElement.style.transform = "scale(-1, -1)";
+    else videoElement.style.transform = "unset";
+}
+
+function playCam(shouldPlay)
+{
+    if (started && camsLoaded)
+    {
+        if (shouldPlay)
+        {
+            active = true;
+            videoElement.play();
+        }
+        else
+        {
+            active = false;
+            videoElement.pause();
+        }
+    }
+}
+
+inGenTex.onChange = () =>
+{
+    playCam(inGenTex.get());
+};
+
+function updateTexture()
+{
+    cgl.gl.bindTexture(cgl.gl.TEXTURE_2D, tex.tex);
+
+    cgl.gl.texImage2D(cgl.gl.TEXTURE_2D, 0, cgl.gl.RGBA, cgl.gl.RGBA, cgl.gl.UNSIGNED_BYTE, videoElement);
+    cgl.gl.bindTexture(cgl.gl.TEXTURE_2D, null);
+    textureOut.set(emptyTexture);
+
+    if (!tc)initCopyShader();
+    if (tc)textureOut.set(tc.copy(tex));
+}
+
+function stopStream()
+{
+    if (!currentStream) return;
+
+    playCam(false);
+    available.set(false);
+
+    currentStream.getTracks().forEach((track) =>
+    {
+        track.stop();
+    });
+    currentStream = null;
+}
+
+function camInitComplete(stream)
+{
+    currentStream = stream;
+    videoElement.srcObject = stream;
+    videoElement.onloadedmetadata = (e) =>
+    {
+        // console.log(stream.getTracks());
+
+        outSelectedDevice.set(stream.getTracks()[0].label);
+        if (inInputDevices.get() != "Default" && stream.getTracks()[0].label != inInputDevices.get() && tries < 3)
+        {
+            tries++;
+            // console.log("try again...");
+            return restartWebcam();
+        }
+
+        // console.log(stream.getTracks()[0].getSettings());
+
+        const settings = stream.getTracks()[0].getSettings();
+        restarting = false;
+
+        const w = settings.width || inWidth.get();
+        const h = settings.height || inHeight.get();
+
+        outHeight.set(h);
+        outWidth.set(w);
+        outRatio.set(settings.aspectRatio || w / h);
+        outError.set("");
+
+        videoElement.setAttribute("width", settings.width);
+        videoElement.setAttribute("height", settings.height);
+
+        outElement.set(videoElement);
+
+        tex.setSize(w, h);
+
+        available.set(true);
+        // console.log("cam init complete");
+        playCam(inGenTex.get());
+    };
+}
+
+function isCorrectSize()
+{
+    const constraints = getCamConstraints();
+    const check = constraints.video.width == videoElement.videoWidth && constraints.video.height == videoElement.videoHeight;
+    return check;
+}
+
+function getCamConstraints()
+{
+    let constr = { "audio": false, "video": {} };
+
+    if (camsLoaded)
+    {
+        let deviceLabel = inInputDevices.get();
+        let deviceInfo = null;
+
+        if (!deviceLabel || deviceLabel === "Default" || deviceLabel === "...")
+        {
+            deviceInfo = Object.values(camInputDevices)[0];
+        }
+        else
+        {
+            deviceInfo = camInputDevices.filter((d) => d.label === deviceLabel);
+            if (deviceInfo)
+            {
+                deviceInfo = deviceInfo[0];
+            }
+            else
+            { // otherwise get by number
+                deviceInfo = Object.values(camInputDevices)[deviceLabel];
+            }
+
+            if (!deviceInfo)
+            {
+                deviceInfo = Object.values(camInputDevices)[0];
+            }
+        }
+        constr.video = { "deviceId": { "exact": deviceInfo.deviceId } };
+    }
+
+    // constr.video.facingMode = { "exact": inFacing.get() };
+
+    const w = inWidth.get();
+    const h = inHeight.get();
+    let width = { "min": 640 };
+    let height = { "min": 480 };
+
+    if (w)
+        width.ideal = w;
+
+    if (h)
+        height.ideal = h;
+
+    constr.video.width = width;
+    constr.video.height = height;
+
+    // console.log("constraints", constr);
+
+    return constr;
+}
+
+function restartWebcam()
+{
+    stopStream();
+    restarting = true;
+
+    const constr = getCamConstraints();
+
+    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia;
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    {
+        navigator.mediaDevices.getUserMedia(constr)
+            .then(camInitComplete)
+            .catch((error) =>
+            {
+                restarting = false;
+                op.logError(error.name + ": " + error.message, error);
+                outError.set(error.name + ": " + error.message);
+            });
+    }
+    else if (navigator.getUserMedia)
+    {
+        // console.log("nope");
+        restarting = false;
+        navigator.getUserMedia(constr, camInitComplete, () => available.set(false));
+    }
+}
+
+function initDevices()
+{
+    initingDevices = true;
+    loadingId = cgl.patch.loading.start("Webcam inputs", "");
+    const constraints = getCamConstraints();
+
+    navigator.mediaDevices.getUserMedia(constraints)
+        .then((res) => navigator.mediaDevices.enumerateDevices())
+        .then((devices) =>
+        {
+            camInputDevices = devices
+                .filter((device) => device.kind === "videoinput");
+
+            initingDevices = false;
+            inInputDevices.uiAttribs.values = camInputDevices.map((d, idx) => d.label || idx);
+            inInputDevices.uiAttribs.values.unshift("Default");
+            outDevices.set(inInputDevices.uiAttribs.values);
+            cgl.patch.loading.finished(loadingId);
+
+            camsLoaded = true;
+
+            restartWebcam();
+            started = true;
+        }).catch((e) =>
+        {
+            initingDevices = false;
+            console.error("error", e);
+            outError.set(e.name + ": " + e.message);
+            cgl.patch.loading.finished(loadingId);
+            camsLoaded = false;
+        });
+}
+
+inTrigger.onTriggered = () =>
+{
+    if (!initingDevices && inActive.get())
+    {
+        if (started && camsLoaded && active)
+        {
+            updateTexture();
+            outUpdate.trigger();
+        }
+
+        // console.log(active, started, camsLoaded);
+
+        if (!started && camsLoaded)
+        {
+            restartWebcam();
+        }
+    }
+
+    next.trigger();
+};
+
+
+};
+
+Ops.Gl.Textures.WebcamTexture_v3.prototype = new CABLES.Op();
+CABLES.OPS["71c0468d-e942-4574-a91d-b3d7271922d0"]={f:Ops.Gl.Textures.WebcamTexture_v3,objName:"Ops.Gl.Textures.WebcamTexture_v3"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Libs.Mediapipe.MpHand
+// 
+// **************************************************************
+
+Ops.Libs.Mediapipe.MpHand = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    inMpResult = op.inObject("Hands Result"),
+    inWhichHand = op.inSwitch("Hand", ["Left", "Right"], "Left"),
+    inMinScore = op.inFloatSlider("Min Score", 0.2),
+    outPoints = op.outArray("Points"),
+    outLines = op.outArray("Lines"),
+    outResult = op.outObject("Data"),
+    outFound = op.outBoolNum("Found Hand"),
+    outScore = op.outNumber("Score");
+
+function getLines(points)
+{
+    const lines = [];
+    lines.push(points[0 * 3 + 0], points[0 * 3 + 1], points[0 * 3 + 2]); // thumb
+    lines.push(points[1 * 3 + 0], points[1 * 3 + 1], points[1 * 3 + 2]);
+    lines.push(points[1 * 3 + 0], points[1 * 3 + 1], points[1 * 3 + 2]);
+    lines.push(points[2 * 3 + 0], points[2 * 3 + 1], points[2 * 3 + 2]);
+    lines.push(points[2 * 3 + 0], points[2 * 3 + 1], points[2 * 3 + 2]);
+    lines.push(points[3 * 3 + 0], points[3 * 3 + 1], points[3 * 3 + 2]);
+    lines.push(points[3 * 3 + 0], points[3 * 3 + 1], points[3 * 3 + 2]);
+    lines.push(points[4 * 3 + 0], points[4 * 3 + 1], points[4 * 3 + 2]);
+
+    lines.push(points[0 * 3 + 0], points[0 * 3 + 1], points[0 * 3 + 2]); // wrist
+    lines.push(points[5 * 3 + 0], points[5 * 3 + 1], points[5 * 3 + 2]);
+    lines.push(points[5 * 3 + 0], points[5 * 3 + 1], points[5 * 3 + 2]);
+    lines.push(points[9 * 3 + 0], points[9 * 3 + 1], points[9 * 3 + 2]);
+    lines.push(points[9 * 3 + 0], points[9 * 3 + 1], points[9 * 3 + 2]);
+    lines.push(points[13 * 3 + 0], points[13 * 3 + 1], points[13 * 3 + 2]);
+    lines.push(points[13 * 3 + 0], points[13 * 3 + 1], points[13 * 3 + 2]);
+    lines.push(points[17 * 3 + 0], points[17 * 3 + 1], points[17 * 3 + 2]);
+    lines.push(points[17 * 3 + 0], points[17 * 3 + 1], points[17 * 3 + 2]);
+    lines.push(points[0 * 3 + 0], points[0 * 3 + 1], points[0 * 3 + 2]);
+
+    lines.push(points[5 * 3 + 0], points[5 * 3 + 1], points[5 * 3 + 2]); // index finger
+    lines.push(points[6 * 3 + 0], points[6 * 3 + 1], points[6 * 3 + 2]);
+    lines.push(points[6 * 3 + 0], points[6 * 3 + 1], points[6 * 3 + 2]);
+    lines.push(points[7 * 3 + 0], points[7 * 3 + 1], points[7 * 3 + 2]);
+    lines.push(points[7 * 3 + 0], points[7 * 3 + 1], points[7 * 3 + 2]);
+    lines.push(points[8 * 3 + 0], points[8 * 3 + 1], points[8 * 3 + 2]);
+
+    lines.push(points[9 * 3 + 0], points[9 * 3 + 1], points[9 * 3 + 2]); // middle finger
+    lines.push(points[10 * 3 + 0], points[10 * 3 + 1], points[10 * 3 + 2]);
+    lines.push(points[10 * 3 + 0], points[10 * 3 + 1], points[10 * 3 + 2]);
+    lines.push(points[11 * 3 + 0], points[11 * 3 + 1], points[11 * 3 + 2]);
+    lines.push(points[11 * 3 + 0], points[11 * 3 + 1], points[11 * 3 + 2]);
+    lines.push(points[12 * 3 + 0], points[12 * 3 + 1], points[12 * 3 + 2]);
+
+    lines.push(points[13 * 3 + 0], points[13 * 3 + 1], points[13 * 3 + 2]); // ring finger
+    lines.push(points[14 * 3 + 0], points[14 * 3 + 1], points[14 * 3 + 2]);
+    lines.push(points[14 * 3 + 0], points[14 * 3 + 1], points[14 * 3 + 2]);
+    lines.push(points[15 * 3 + 0], points[15 * 3 + 1], points[15 * 3 + 2]);
+    lines.push(points[15 * 3 + 0], points[15 * 3 + 1], points[15 * 3 + 2]);
+    lines.push(points[16 * 3 + 0], points[16 * 3 + 1], points[16 * 3 + 2]);
+
+    lines.push(points[17 * 3 + 0], points[17 * 3 + 1], points[17 * 3 + 2]); // ring finger
+    lines.push(points[18 * 3 + 0], points[18 * 3 + 1], points[18 * 3 + 2]);
+    lines.push(points[18 * 3 + 0], points[18 * 3 + 1], points[18 * 3 + 2]);
+    lines.push(points[19 * 3 + 0], points[19 * 3 + 1], points[19 * 3 + 2]);
+    lines.push(points[19 * 3 + 0], points[19 * 3 + 1], points[19 * 3 + 2]);
+    lines.push(points[20 * 3 + 0], points[20 * 3 + 1], points[20 * 3 + 2]);
+
+    return lines;
+}
+
+inMpResult.onChange = () =>
+{
+    let points = [];
+    let points2 = [];
+    let lines = null;
+    let lines2 = null;
+    let r = inMpResult.get();
+
+    if (r && r.multiHandedness)
+    {
+
+    }
+    else
+    {
+        outFound.set(false);
+        outScore.set(0);
+        return;
+    }
+
+    let idx = 0;
+
+    // console.log(r);
+    let found = false;
+
+    if (r.multiHandedness)
+    {
+        for (let i = 0; i < r.multiHandedness.length; i++)
+        {
+            if (r.multiHandedness[i].label == inWhichHand.get())
+            {
+                idx = i;
+                outScore.set(r.multiHandedness[i].score);
+                found = true;
+            }
+        }
+    }
+
+    if (found && outScore.get() > inMinScore.get())
+    {
+        outFound.set(true);
+        if (r && r.multiHandLandmarks && r.multiHandLandmarks[idx])
+        {
+            for (let i = 0; i < r.multiHandLandmarks[idx].length; i++)
+            {
+                points[i * 3] = (r.multiHandLandmarks[idx][i].x - 0.5) * 2;
+                points[i * 3 + 1] = -1 * (r.multiHandLandmarks[idx][i].y - 0.5) * 2;
+                points[i * 3 + 2] = 0;
+            }
+            lines = getLines(points);
+
+            outPoints.set(points);
+            outLines.set(lines);
+            outResult.set(r.multiHandLandmarks[idx]);
+        }
+    }
+    else
+    {
+        outResult.set(null);
+        outPoints.set(null);
+        outLines.set(null);
+
+        outFound.set(false);
+    }
+};
+
+
+};
+
+Ops.Libs.Mediapipe.MpHand.prototype = new CABLES.Op();
+CABLES.OPS["935b0d02-1dce-4d5c-87a8-f1fa36c5d25e"]={f:Ops.Libs.Mediapipe.MpHand,objName:"Ops.Libs.Mediapipe.MpHand"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Ui.VizTexture
+// 
+// **************************************************************
+
+Ops.Ui.VizTexture = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={"viztex_frag":"IN vec2 texCoord;\nUNI sampler2D tex;\nUNI samplerCube cubeMap;\nUNI float width;\nUNI float height;\nUNI float type;\n\nfloat LinearizeDepth(float d,float zNear,float zFar)\n{\n    float z_n = 2.0 * d - 1.0;\n    return 2.0 * zNear / (zFar + zNear - z_n * (zFar - zNear));\n}\n\nvoid main()\n{\n    vec4 col=vec4(vec3(0.),0.0);\n\n    vec4 colTex=texture2D(tex,texCoord);\n\n    if(type==0.0)\n    {\n    }\n\n    if(type==1.0)\n    {\n        vec4 depth=vec4(0.);\n        vec2 localST=texCoord;\n        localST.y = 1. - localST.y;\n\n        localST.t = mod(localST.t*3.,1.);\n        localST.s = mod(localST.s*4.,1.);\n\n        #ifdef WEBGL2\n            #define texCube texture\n        #endif\n        #ifdef WEBGL1\n            #define texCube textureCube\n        #endif\n\n//         //Due to the way my depth-cubeMap is rendered, objects to the -x,y,z side is projected to the positive x,y,z side\n//         //Inside where top/bottom is to be drawn?\n        if (texCoord.s*4.> 1. && texCoord.s*4.<2.)\n        {\n            //Bottom (-y) quad\n            if (texCoord.t*3. < 1.)\n            {\n                vec3 dir=vec3(localST.s*2.-1.,-1.,-localST.t*2.+1.);//Due to the (arbitrary) way I choose as up in my depth-viewmatrix, i her emultiply the latter coordinate with -1\n                depth = texCube(cubeMap, dir);\n            }\n            //top (+y) quad\n            else if (texCoord.t*3. > 2.)\n            {\n                vec3 dir=vec3(localST.s*2.-1.,1.,localST.t*2.-1.);//Get lower y texture, which is projected to the +y part of my cubeMap\n                depth = texCube(cubeMap, dir);\n            }\n            else//Front (-z) quad\n            {\n                vec3 dir=vec3(localST.s*2.-1.,-localST.t*2.+1.,1.);\n                depth = texCube(cubeMap, dir);\n            }\n        }\n//         //If not, only these ranges should be drawn\n        else if (texCoord.t*3. > 1. && texCoord.t*3. < 2.)\n        {\n            if (texCoord.x*4. < 1.)//left (-x) quad\n            {\n                vec3 dir=vec3(-1.,-localST.t*2.+1.,localST.s*2.-1.);\n                depth = texCube(cubeMap, dir);\n            }\n            else if (texCoord.x*4. < 3.)//right (+x) quad (front was done above)\n            {\n                vec3 dir=vec3(1,-localST.t*2.+1.,-localST.s*2.+1.);\n                depth = texCube(cubeMap, dir);\n            }\n            else //back (+z) quad\n            {\n                vec3 dir=vec3(-localST.s*2.+1.,-localST.t*2.+1.,-1.);\n                depth = texCube(cubeMap, dir);\n            }\n        }\n        colTex = vec4(vec3(depth),1.);\n    }\n\n    if(type==2.0)\n    {\n       float near = 0.1;\n       float far = 50.;\n       float depth = LinearizeDepth(colTex.r, near, far);\n       colTex.rgb = vec3(depth);\n    }\n\n\n    outColor = mix(col,colTex,colTex.a);\n}\n\n","viztex_vert":"IN vec3 vPosition;\nIN vec2 attrTexCoord;\nOUT vec2 texCoord;\nUNI mat4 projMatrix;\nUNI mat4 modelMatrix;\nUNI mat4 viewMatrix;\n\nvoid main()\n{\n    texCoord=vec2(attrTexCoord.x,1.0-attrTexCoord.y);\n    vec4 pos = vec4( vPosition, 1. );\n    mat4 mvMatrix=viewMatrix * modelMatrix;\n    gl_Position = projMatrix * mvMatrix * pos;\n}",};
+const
+    inTex = op.inTexture("Texture In"),
+    outTex = op.outTexture("Texture Out"),
+    outInfo = op.outString("Info");
+
+op.setUiAttrib({ "height": 150, "resizable": true });
+
+inTex.onChange = () =>
+{
+    outTex.set(CGL.Texture.getEmptyTexture(op.patch.cgl));
+    outTex.set(inTex.get());
+};
+
+op.renderVizLayer = (ctx, layer) =>
+{
+    const port = inTex;
+    const texSlot = 5;
+    const texSlotCubemap = texSlot + 1;
+
+    const perf = CABLES.UI.uiProfiler.start("previewlayer texture");
+    const cgl = port.parent.patch.cgl;
+
+    if (!this._emptyCubemap) this._emptyCubemap = CGL.Texture.getEmptyCubemapTexture(cgl);
+    port.parent.patch.cgl.profileData.profileTexPreviews++;
+
+    const portTex = port.get() || CGL.Texture.getEmptyTexture(cgl);
+
+    if (!this._mesh)
+    {
+        const geom = new CGL.Geometry("preview op rect");
+        geom.vertices = [1.0, 1.0, 0.0, -1.0, 1.0, 0.0, 1.0, -1.0, 0.0, -1.0, -1.0, 0.0];
+        geom.texCoords = [
+            1.0, 1.0,
+            0.0, 1.0,
+            1.0, 0.0,
+            0.0, 0.0];
+        geom.verticesIndices = [0, 1, 2, 3, 1, 2];
+        this._mesh = new CGL.Mesh(cgl, geom);
+    }
+    if (!this._shader)
+    {
+        this._shader = new CGL.Shader(cgl, "glpreviewtex");
+        this._shader.setModules(["MODULE_VERTEX_POSITION", "MODULE_COLOR", "MODULE_BEGIN_FRAG"]);
+        this._shader.setSource(attachments.viztex_vert, attachments.viztex_frag);
+        this._shaderTexUniform = new CGL.Uniform(this._shader, "t", "tex", texSlot);
+        this._shaderTexCubemapUniform = new CGL.Uniform(this._shader, "tc", "cubeMap", texSlotCubemap);
+
+        this._shaderTexUniformW = new CGL.Uniform(this._shader, "f", "width", portTex.width);
+        this._shaderTexUniformH = new CGL.Uniform(this._shader, "f", "height", portTex.height);
+        this._shaderTypeUniform = new CGL.Uniform(this._shader, "f", "type", 0);
+    }
+
+    cgl.pushPMatrix();
+    const sizeTex = [portTex.width, portTex.height];
+    const small = port.parent.patch.cgl.canvasWidth > sizeTex[0] && port.parent.patch.cgl.canvasHeight > sizeTex[1];
+
+    if (small)
+    {
+        mat4.ortho(cgl.pMatrix, 0, port.parent.patch.cgl.canvasWidth, port.parent.patch.cgl.canvasHeight, 0, 0.001, 11);
+    }
+    else mat4.ortho(cgl.pMatrix, -1, 1, 1, -1, 0.001, 11);
+
+    const oldTex = cgl.getTexture(texSlot);
+    const oldTexCubemap = cgl.getTexture(texSlotCubemap);
+
+    let texType = 0;
+    if (!portTex) return;
+    if (portTex.cubemap) texType = 1;
+    if (portTex.textureType == CGL.Texture.TYPE_DEPTH) texType = 2;
+
+    if (texType == 0 || texType == 2)
+    {
+        cgl.setTexture(texSlot, portTex.tex);
+        cgl.setTexture(texSlotCubemap, this._emptyCubemap.cubemap, cgl.gl.TEXTURE_CUBE_MAP);
+    }
+    else if (texType == 1)
+    {
+        cgl.setTexture(texSlotCubemap, portTex.cubemap, cgl.gl.TEXTURE_CUBE_MAP);
+    }
+
+    this._shaderTypeUniform.setValue(texType);
+    let s = [port.parent.patch.cgl.canvasWidth, port.parent.patch.cgl.canvasHeight];
+
+    cgl.gl.clearColor(0, 0, 0, 0);
+    cgl.gl.clear(cgl.gl.COLOR_BUFFER_BIT | cgl.gl.DEPTH_BUFFER_BIT);
+
+    cgl.pushModelMatrix();
+    if (small)
+    {
+        s = sizeTex;
+        mat4.translate(cgl.mMatrix, cgl.mMatrix, [sizeTex[0] / 2, sizeTex[1] / 2, 0]);
+        mat4.scale(cgl.mMatrix, cgl.mMatrix, [sizeTex[0] / 2, sizeTex[1] / 2, 0]);
+    }
+    this._mesh.render(this._shader);
+    cgl.popModelMatrix();
+
+    if (texType == 0) cgl.setTexture(texSlot, oldTex);
+    if (texType == 1) cgl.setTexture(texSlotCubemap, oldTexCubemap);
+
+    cgl.popPMatrix();
+    cgl.resetViewPort();
+
+    const sizeImg = [layer.width, layer.height];
+
+    const stretch = false;
+    if (!stretch)
+    {
+        if (portTex.width > portTex.height) sizeImg[1] = layer.width * sizeTex[1] / sizeTex[0];
+        else
+        {
+            sizeImg[1] = layer.width * (sizeTex[1] / sizeTex[0]);
+
+            if (sizeImg[1] > layer.height)
+            {
+                const r = layer.height / sizeImg[1];
+                sizeImg[0] *= r;
+                sizeImg[1] *= r;
+            }
+        }
+    }
+
+    const scaledDown = sizeImg[0] > sizeTex[0] && sizeImg[1] > sizeTex[1];
+
+    ctx.imageSmoothingEnabled = !small || !scaledDown;
+
+    if (!ctx.imageSmoothingEnabled)
+    {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(layer.x, layer.y - 10, 10, 10);
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(layer.x, layer.y - 10, 5, 5);
+        ctx.fillRect(layer.x + 5, layer.y - 10 + 5, 5, 5);
+    }
+
+    let numX = (10 * layer.width / layer.height);
+    let stepY = (layer.height / 10);
+    let stepX = (layer.width / numX);
+    for (let x = 0; x < numX; x++)
+        for (let y = 0; y < 10; y++)
+        {
+            if ((x + y) % 2 == 0)ctx.fillStyle = "#333333";
+            else ctx.fillStyle = "#393939";
+            ctx.fillRect(layer.x + stepX * x, layer.y + stepY * y, stepX, stepY);
+        }
+
+    if (sizeTex[1] == 1)
+        ctx.drawImage(cgl.canvas,
+            0, 0,
+            s[0], s[1],
+            layer.x, layer.y,
+            layer.width, layer.height * 5);// workaround filtering problems
+    if (sizeTex[0] == 1)
+        ctx.drawImage(cgl.canvas,
+            0, 0,
+            s[0], s[1],
+            layer.x, layer.y,
+            layer.width * 5, layer.height); // workaround filtering problems
+    else
+        ctx.drawImage(cgl.canvas,
+            0, 0,
+            s[0], s[1],
+            layer.x + (layer.width - sizeImg[0]) / 2, layer.y + (layer.height - sizeImg[1]) / 2,
+            sizeImg[0], sizeImg[1]);
+
+    if (port.get() && port.get().getInfoOneLine) outInfo.set(port.get().getInfoOneLine());
+    else outInfo.set("unknown");
+
+    cgl.gl.clearColor(0, 0, 0, 0);
+    cgl.gl.clear(cgl.gl.COLOR_BUFFER_BIT | cgl.gl.DEPTH_BUFFER_BIT);
+
+    perf.finish();
+};
+
+
+};
+
+Ops.Ui.VizTexture.prototype = new CABLES.Op();
+CABLES.OPS["4ea2d7b0-ca74-45db-962b-4d1965ac20c0"]={f:Ops.Ui.VizTexture,objName:"Ops.Ui.VizTexture"};
 
 
 window.addEventListener('load', function(event) {

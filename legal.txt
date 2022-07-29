@@ -11,12 +11,6 @@ MIT:
 - Platform.js (https://github.com/bestiejs/platform.js/)
 - navigo (https://github.com/krasimir/navigo)
 
-Public Domain:
-
-- Photoshop math GLSL shaders by Romain Dura (https://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/)
-- GPU-Noise-Lib by Brian Sharpe (https://github.com/BrianSharpe/GPU-Noise-Lib)
-- cannonjs (http://www.cannonjs.org/)
-
 Apache License:
 
 - BabylonJS Shader Code by Babylon.js (https://github.com/BabylonJS/Babylon.js/blob/master/license.md)
@@ -25,3 +19,13 @@ Apache License:
 Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported:
 
 - Domain Warping Shader by inigo quilez (http://iquilezles.org/www/articles/warp/warp.htm)
+
+Public Domain:
+
+- Photoshop math GLSL shaders by Romain Dura (https://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/)
+- GPU-Noise-Lib by Brian Sharpe (https://github.com/BrianSharpe/GPU-Noise-Lib)
+- cannonjs (http://www.cannonjs.org/)
+
+Apache:
+
+- mediapipe hands (https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js)
