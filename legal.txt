@@ -25,7 +25,3 @@ Public Domain:
 - Photoshop math GLSL shaders by Romain Dura (https://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/)
 - GPU-Noise-Lib by Brian Sharpe (https://github.com/BrianSharpe/GPU-Noise-Lib)
 - cannonjs (http://www.cannonjs.org/)
-
-Apache:
-
-- mediapipe hands (https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js)
