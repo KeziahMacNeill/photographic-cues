@@ -56,9 +56,9 @@
 * __hit_z__ ```Number```
 * __idle_time__ ```Number```
 * __installation_index_incrementor__ ```Number```
+* __installation_index_incrementor__ ```Number```
+* __installation_input_hand_found__ ```Number```
 * __installation_input_x__ ```Number```
-* __installation_input_x__ ```Number```
-* __installation_input_y__ ```Number```
 * __installation_input_y__ ```Number```
 * __is_hit_body_string_valid__ ```Number```
 * __is_idle_mode__ ```Number```
