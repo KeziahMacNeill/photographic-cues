@@ -42,6 +42,7 @@ Ops.Math.Compare=Ops.Math.Compare || {};
 Ops.Devices.Mouse=Ops.Devices.Mouse || {};
 Ops.Net.WebSocket=Ops.Net.WebSocket || {};
 Ops.Physics.Cannon=Ops.Physics.Cannon || {};
+Ops.Devices.Keyboard=Ops.Devices.Keyboard || {};
 Ops.Gl.ShaderEffects=Ops.Gl.ShaderEffects || {};
 Ops.Gl.TextureEffects=Ops.Gl.TextureEffects || {};
 Ops.Gl.TextureEffects.Noise=Ops.Gl.TextureEffects.Noise || {};
@@ -29747,6 +29748,170 @@ function update()
 
 Ops.Math.VectorLength.prototype = new CABLES.Op();
 CABLES.OPS["a9e7bda2-7f57-4df2-83e3-74cdf63371d7"]={f:Ops.Math.VectorLength,objName:"Ops.Math.VectorLength"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Devices.Keyboard.KeyPressLearn
+// 
+// **************************************************************
+
+Ops.Devices.Keyboard.KeyPressLearn = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const learnedKeyCode = op.inValueInt("key code");
+const canvasOnly = op.inValueBool("canvas only", true);
+const modKey = op.inValueSelect("Mod Key", ["none", "alt"], "none");
+const inEnable = op.inValueBool("Enabled", true);
+const preventDefault = op.inValueBool("Prevent Default");
+const learn = op.inTriggerButton("learn");
+const onPress = op.outTrigger("on press");
+const onRelease = op.outTrigger("on release");
+const outPressed = op.outBoolNum("Pressed", false);
+const outKey = op.outString("Key");
+
+const cgl = op.patch.cgl;
+let learning = false;
+
+modKey.onChange = learnedKeyCode.onChange = updateKeyName;
+
+function onKeyDown(e)
+{
+    if (learning)
+    {
+        learnedKeyCode.set(e.keyCode);
+        if (CABLES.UI)
+        {
+            gui.opParams.show(op);
+        }
+        // op.log("Learned key code: " + learnedKeyCode.get());
+        learning = false;
+        removeListeners();
+        addListener();
+    }
+    else
+    {
+        if (e.keyCode == learnedKeyCode.get())
+        {
+            if (modKey.get() == "alt")
+            {
+                if (e.altKey === true)
+                {
+                    onPress.trigger();
+                    outPressed.set(true);
+                    if (preventDefault.get())e.preventDefault();
+                }
+            }
+            else
+            {
+                onPress.trigger();
+                outPressed.set(true);
+                if (preventDefault.get())e.preventDefault();
+            }
+        }
+    }
+}
+
+function onKeyUp(e)
+{
+    if (e.keyCode == learnedKeyCode.get())
+    {
+        // op.log("Key released, key code: " + e.keyCode);
+        onRelease.trigger();
+        outPressed.set(false);
+    }
+}
+
+op.onDelete = function ()
+{
+    cgl.canvas.removeEventListener("keyup", onKeyUp, false);
+    cgl.canvas.removeEventListener("keydown", onKeyDown, false);
+    document.removeEventListener("keyup", onKeyUp, false);
+    document.removeEventListener("keydown", onKeyDown, false);
+};
+
+learn.onTriggered = function ()
+{
+    // op.log("Listening for key...");
+    learning = true;
+    addDocumentListener();
+
+    setTimeout(function ()
+    {
+        learning = false;
+        removeListeners();
+        addListener();
+    }, 3000);
+};
+
+function addListener()
+{
+    if (canvasOnly.get()) addCanvasListener();
+    else addDocumentListener();
+}
+
+function removeListeners()
+{
+    document.removeEventListener("keydown", onKeyDown, false);
+    document.removeEventListener("keyup", onKeyUp, false);
+    cgl.canvas.removeEventListener("keydown", onKeyDown, false);
+    cgl.canvas.removeEventListener("keyup", onKeyUp, false);
+    outPressed.set(false);
+}
+
+function addCanvasListener()
+{
+    cgl.canvas.addEventListener("keydown", onKeyDown, false);
+    cgl.canvas.addEventListener("keyup", onKeyUp, false);
+}
+
+function addDocumentListener()
+{
+    document.addEventListener("keydown", onKeyDown, false);
+    document.addEventListener("keyup", onKeyUp, false);
+}
+
+inEnable.onChange = function ()
+{
+    if (!inEnable.get())
+    {
+        removeListeners();
+    }
+    else
+    {
+        addListener();
+    }
+};
+
+canvasOnly.onChange = function ()
+{
+    removeListeners();
+    addListener();
+};
+
+function updateKeyName()
+{
+    let keyName = CABLES.keyCodeToName(learnedKeyCode.get());
+    const modKeyName = modKey.get();
+    if (modKeyName && modKeyName !== "none")
+    {
+        keyName = modKeyName.charAt(0).toUpperCase() + modKeyName.slice(1) + "-" + keyName;
+    }
+    op.setUiAttribs({ "extendTitle": keyName });
+    outKey.set(keyName);
+}
+
+addCanvasListener();
+
+
+};
+
+Ops.Devices.Keyboard.KeyPressLearn.prototype = new CABLES.Op();
+CABLES.OPS["f069c0db-4051-4eae-989e-6ef7953787fd"]={f:Ops.Devices.Keyboard.KeyPressLearn,objName:"Ops.Devices.Keyboard.KeyPressLearn"};
 
 
 window.addEventListener('load', function(event) {
