@@ -2,7 +2,6 @@
 
 * __about_button_hover__ ```Number```
 * __about_button_hover__ ```Number```
-* __angle_between_camera_and_hit__ ```Number```
 * __audio_button_hover__ ```Number```
 * __audio_output_gain__ ```Number```
 * __background_gradient_texture__ ```Texture```
@@ -16,21 +15,26 @@
 * __click_in_lake__ ```Number```
 * __debug_mode__ ```Number```
 * __floor_has_been_hit__ ```Number```
+* __fog_b__ ```Number```
 * __fog_end__ ```Number```
+* __fog_g__ ```Number```
 * __fog_gradient_color_seed__ ```Number```
 * __fog_gradient_texture_toggle__ ```Number```
+* __fog_r__ ```Number```
 * __fog_start__ ```Number```
 * __font_fam_1__ ```String```
 * __font_fam_2__ ```String```
 * __font_fam_3__ ```String```
 * __fonts_loaded__ ```Number```
 * __fullscreen_button_hover__ ```Number```
+* __gallery_atlas_texture__ ```Texture```
 * __gallery_draw_bodies__ ```Number```
 * __gallery_height__ ```Number```
 * __gallery_item_clicked_index__ ```Number```
 * __gallery_item_clicked_transition__ ```Number```
 * __gallery_item_hovered_index__ ```Number```
 * __gallery_item_hovered_texture__ ```Texture```
+* __gallery_item_size__ ```Number```
 * __gallery_items_amount__ ```Number```
 * __gallery_items_position_array__ ```Array```
 * __gallery_items_rotation_array__ ```Array```
@@ -39,8 +43,10 @@
 * __gallery_overview_camera_pos_X__ ```Number```
 * __gallery_overview_camera_pos_Y__ ```Number```
 * __gallery_overview_camera_pos_Z__ ```Number```
+* __gallery_texture_array__ ```Array```
 * __gallery_width__ ```Number```
 * __goto_idle_mode_time__ ```Number```
+* __grass_amount__ ```Number```
 * __grass_asset_model__ ```Number```
 * __grass_seed__ ```Number```
 * __has_hit__ ```Number```
@@ -51,6 +57,8 @@
 * __idle_time__ ```Number```
 * __installation_index_incrementor__ ```Number```
 * __installation_input_x__ ```Number```
+* __installation_input_x__ ```Number```
+* __installation_input_y__ ```Number```
 * __installation_input_y__ ```Number```
 * __is_hit_body_string_valid__ ```Number```
 * __is_idle_mode__ ```Number```
@@ -66,11 +74,13 @@
 * __mountain_displacement_amount__ ```Number```
 * __mouse3D_x__ ```Number```
 * __mouse3D_y__ ```Number```
+* __perlin_area_deform_timer__ ```Number```
 * __postpro_hue_offset__ ```Number```
 * __postpro_noise_amount__ ```Number```
 * __quality_button_hover__ ```Number```
-* __render_performance_setting__ ```Number``` (default Value: `0`)
 * __render_performance_setting__ ```Number```
+* __ripples_post_displacement_tex__ ```Texture```
+* __ripples_post_normal_tex__ ```Texture```
 * __Ripples_Texture_Size__ ```Number```
 * __scene_0_cam_rot_x__ ```Number```
 * __scene_0_cam_rot_y__ ```Number```
@@ -90,13 +100,20 @@
 * __scene_transition_1-2__ ```Number```
 * __show_intro_text__ ```Number```
 * __show_performance__ ```Number```
+* __sky_tex__ ```Texture```
 * __start_experience_button_hover__ ```Number```
 * __text_detail_was_hovered__ ```Number```
 * __text_intro__ ```String```
 * __text_texture__ ```Texture```
 * __texture_3Dmouse_lake__ ```Texture```
 * __texture_lake_boundary__ ```Texture```
+* __texture_lake_boundary_red__ ```Texture```
+* __texture_scene_depth__ ```Texture```
+* __texture_scene_mountains_depth__ ```Texture```
+* __texture_scene_postpro__ ```Texture```
+* __texture_scene_raw__ ```Texture```
 * __timeline_offset__ ```Number```
+* __toggle_background_gradient_flip_texture__ ```Number```
 * __Transition Duration Overview > Detail View__ ```Number```
 * __Transition Duration Title > Tutorial__ ```Number```
 * __Transition Duration Tutorial > Lake__ ```Number```
@@ -104,6 +121,9 @@
 * __tutorial_colorarea_position_z__ ```Number```
 * __tutorial_colorarea_size__ ```Number```
 * __tutorial_transition__ ```Number```
+* __water_data_loop__ ```Number```
+* __water_data_loop_speed__ ```Number```
+* __water_data_month__ ```String```
 * __water_data_offset__ ```Number```
 * __water_level__ ```Number```
 * __web_mode__ ```Number```
