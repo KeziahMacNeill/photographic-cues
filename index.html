@@ -27,14 +27,13 @@
             background-color: #000;
             color: #fff;
             font-family: Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            /* disable scrolling / rubberband effect on mobile */
+            overflow: hidden; /* disable scrolling / rubberband effect on mobile */
         }
 
         canvas {
             display: block;
             position: absolute;
-            outline: 0;
+            outline:0;
         }
 
         * {
@@ -65,36 +64,35 @@
             color: var(--highlight-color);
         }
     </style>
+
 </head>
 
 <body>
     <canvas id="glcanvas" width="100vw" height="100vh" tabindex="1"></canvas>
     <footer>
-
+        
         <!-- we would greatly appreciate if you link cables somewhere on your site! and tell us your website! thanks <3 :) -->
     </footer>
 
     <script type="text/javascript"  src="js/cannon.js"></script>
-    <script type="text/javascript"  src="js/platform.js"></script>
-    <script type="text/javascript"  src="js/navigo.js"></script>
-    <script type="text/javascript"  src="js/mp_hands.js"></script>
-    <script type="text/javascript"  src="js/mp_camera_utils.js"></script>
-    
-        <script type="text/javascript" src="js/libs.core.min.js"></script>
-    <script type="text/javascript" src="js/cables.min.js"></script>
-    <script type="text/javascript" src="js/ops.js"></script>
-    
-        <script type="text/javascript"  src="js/cgl_wireframes.js"></script>
-    <script type="text/javascript"  src="js/cgl_cubemapframebuffer.js"></script>
-    <script type="text/javascript"  src="js/cgl_copytexture.js"></script>
-    <script type="text/javascript"  src="js/vargetset.js"></script>
-    <script type="text/javascript"  src="js/cgl_shadermodifier.js"></script>
-    
-    
+<script type="text/javascript"  src="js/platform.js"></script>
+<script type="text/javascript"  src="js/navigo.js"></script>
+
+    <script type="text/javascript" src="js/libs.core.min.js"></script>
+<script type="text/javascript" src="js/cables.min.js"></script>
+<script type="text/javascript" src="js/ops.js"></script>
+
+    <script type="text/javascript"  src="js/cgl_wireframes.js"></script>
+<script type="text/javascript"  src="js/cgl_cubemapframebuffer.js"></script>
+<script type="text/javascript"  src="js/cgl_copytexture.js"></script>
+<script type="text/javascript"  src="js/vargetset.js"></script>
+<script type="text/javascript"  src="js/cgl_shadermodifier.js"></script>
+
+
     <script>
 
         // disable rubberband effect on mobile devices
-        document.getElementById('glcanvas').addEventListener('touchmove', (e) => { e.preventDefault(); }, false);
+        document.getElementById('glcanvas').addEventListener('touchmove', (e)=>{ e.preventDefault(); }, false);
 
 
         function patchInitialized(patch) {
@@ -107,14 +105,13 @@
 
         document.addEventListener('CABLES.jsLoaded', function (event) {
             CABLES.patch = new CABLES.Patch({
-                patchFile: 'js/Lake_-_Mickey_4.json',
+                patchFile: 'js/Lake_-_Mickey_Cleanup.json',
                 "prefixAssetPath": "",
                 "glCanvasId": "glcanvas",
                 "glCanvasResizeToWindow": true,
-                "silent": true,
                 "onPatchLoaded": patchInitialized,
                 "onFinishedLoading": patchFinishedLoading,
-                "canvas": { "alpha": true, "premultipliedAlpha": true } // make canvas transparent
+                "canvas":{"alpha":true,"premultipliedAlpha":true} // make canvas transparent
             });
         });
     </script>
