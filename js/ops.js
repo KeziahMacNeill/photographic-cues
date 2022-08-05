@@ -28457,223 +28457,6 @@ CABLES.OPS["e15cfbc7-d2fa-4348-8964-66d02aec77aa"]={f:Ops.Html.AppendChild_v2,ob
 
 // **************************************************************
 // 
-// Ops.User.mick.GoogleAnalytics
-// 
-// **************************************************************
-
-Ops.User.mick.GoogleAnalytics = function()
-{
-CABLES.Op.apply(this,arguments);
-const op=this;
-const attachments={};
-const inLoad = op.inTriggerButton("Load");
-const inGID = op.inString("GA_MEASUREMENT_ID");
-const inConsent = op.inTriggerButton('Consent to be tracked (full analytics)');
-const inRevokeConsent = op.inTriggerButton('Do not consent (basic analytics)');
-const inDisableAnalytics = op.inTriggerButton('Disable Google Analytics');
-const inResetBanner = op.inTriggerButton('Reset banner cookie');
-
-const outTrigger = op.outTrigger('Loaded trigger');
-const outLoaded = op.outBool("Loaded");
-const outConsent = op.outBool('Consent ok');
-const outShowBanner = op.outBool('Show banner');
-
-outShowBanner.set(true);
-
-const COOKIE_NAME = "cables_google_analytics_consent";
-
-function loadScript(callback) {
-    console.log("loadScript");
-    const head = document.head;
-    const script = document.createElement('script');
-    script.async = true;
-    script.onload = callback;
-    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
-
-    head.appendChild(script);
-}
-
-function doNotConsent() {
-    console.log("doNotConsent");
-    deleteCookie();
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    }
-    window.gtag('consent', 'default', {
-      'ad_storage': 'denied',
-      'analytics_storage': 'denied'
-    });
-}
-
-function doLoadAndConsent() {
-    if (!inGID.get()) {
-        console.error('Empty GA_MEASUREMENT_ID');
-        return;
-    }
-
-    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
-        console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
-
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
-
-        doConsent();
-
-        outConsent.set(true);
-        outShowBanner.set(true);
-        outLoaded.set(true);
-        outTrigger.trigger();
-    });
-}
-
-function doConsent() {
-    console.log("doConsent");
-    if (!window.hasOwnProperty('gtag')) {
-        console.error('Load Google Analytics first');
-        outConsent.set(false);
-        return;
-    }
-    window.gtag('consent', 'update', {
-      'ad_storage': 'granted',
-      'analytics_storage': 'granted'
-    });
-}
-
-function disableAnalytics() {
-    window['ga-disable-' + inGID.get()] = true;
-    console.log('Google Analytics disabled');
-}
-
-
-function readAnalyticsCookieState() {
-    console.log("readAnalyticsCookieState");
-    const toks = document.cookie.split('; ');
-
-    if (!toks.find(row => row.startsWith(COOKIE_NAME)))
-        return 'unset';
-
-    if (toks.some((item) => item.includes(`${COOKIE_NAME}=true`)))
-        return 'consent';
-
-    if (toks.some((item) => item.includes(`${COOKIE_NAME}=false`)))
-        return 'donotconsent';
-
-    return 'unset'
-}
-
-function setAnalyticsCookie(consent) {
-    console.log("setAnalyticsCookie");
-    document.cookie = `${COOKIE_NAME}=${consent}; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=None; Secure`;
-}
-
-function deleteCookie() {
-    console.log("deleteCookie");
-    document.cookie = `${COOKIE_NAME}=; Max-Age=0`
-}
-
-
-function activateGtm(w,d,s,l,i, callback) {
-    console.log("activateGtm");
-    w[l] = w[l] || [];
-    w[l].push({'gtm.start': new Date().getTime(), event:'gtm.js'});
-    let f = d.getElementsByTagName(s)[0],
-    j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : '';
-    j.async = true;
-    j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
-    f.parentNode.insertBefore(j,f);
-    j.onload = callback;
-}
-
-inLoad.onTriggered = () => {
-    console.log("inLoad triggered");
-    outLoaded.set(false);
-    outConsent.set(false);
-
-    if (!inGID.get()) {
-        console.error('Empty GA_MEASUREMENT_ID');
-        return;
-    }
-
-    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
-        console.log('Google Analytics loaded');
-        window.dataLayer = window.dataLayer || [];
-        window.gtag = () => {window.dataLayer.push(arguments); }
-
-        window.gtag('js', new Date());
-        window.gtag('config', inGID.get());
-
-        const state = readAnalyticsCookieState();
-        // console.log('STATE:', state);
-        switch(state) {
-            case 'unset':
-                // doConsent();
-                // setAnalyticsCookie(true);
-                outShowBanner.set(true);
-                outConsent.set(false);
-                break;
-            case 'consent':
-                doConsent();
-                outConsent.set(true);
-                outShowBanner.set(true);
-                break;
-            case 'donotconsent':
-                doNotConsent();
-                // setAnalyticsCookie(false);
-                outConsent.set(false);
-                outShowBanner.set(true);
-                break;
-
-            default:
-                break;
-        }
-        outLoaded.set(true);
-        outTrigger.trigger();
-    });
-};
-
-inConsent.onTriggered = () => {
-    doLoadAndConsent();
-    setAnalyticsCookie(true);
-    outConsent.set(true);
-    outShowBanner.set(false);
-}
-
-inRevokeConsent.onTriggered = () => {
-    doNotConsent()
-    //setAnalyticsCookie(false);
-    deleteCookie();
-    outConsent.set(false);
-    outShowBanner.set(false);
-}
-
-inResetBanner.onTriggered = () => {
-    deleteCookie();
-    doConsent();
-    outConsent.set(true);
-    outShowBanner.set(true);
-}
-
-inDisableAnalytics.onTriggered = () => {
-    disableAnalytics();
-    deleteCookie();
-    outShowBanner.set(false);
-    outConsent.set(false);
-}
-
-};
-
-Ops.User.mick.GoogleAnalytics.prototype = new CABLES.Op();
-
-
-
-
-
-// **************************************************************
-// 
 // Ops.Gl.TextureEffects.ScaleTexture_v2
 // 
 // **************************************************************
@@ -29912,6 +29695,223 @@ addCanvasListener();
 
 Ops.Devices.Keyboard.KeyPressLearn.prototype = new CABLES.Op();
 CABLES.OPS["f069c0db-4051-4eae-989e-6ef7953787fd"]={f:Ops.Devices.Keyboard.KeyPressLearn,objName:"Ops.Devices.Keyboard.KeyPressLearn"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.User.mick.GoogleAnalytics
+// 
+// **************************************************************
+
+Ops.User.mick.GoogleAnalytics = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const inLoad = op.inTriggerButton("Load");
+const inGID = op.inString("GA_MEASUREMENT_ID");
+const inConsent = op.inTriggerButton('Consent to be tracked (full analytics)');
+const inRevokeConsent = op.inTriggerButton('Do not consent (basic analytics)');
+const inDisableAnalytics = op.inTriggerButton('Disable Google Analytics');
+const inResetBanner = op.inTriggerButton('Reset banner cookie');
+
+const outTrigger = op.outTrigger('Loaded trigger');
+const outLoaded = op.outBool("Loaded");
+const outConsent = op.outBool('Consent ok');
+const outShowBanner = op.outBool('Show banner');
+
+outShowBanner.set(true);
+
+const COOKIE_NAME = "cables_google_analytics_consent";
+
+function loadScript(callback) {
+    console.log("loadScript");
+    const head = document.head;
+    const script = document.createElement('script');
+    script.async = true;
+    script.onload = callback;
+    script.src = "https://www.googletagmanager.com/gtag/js?id=" + inGID.get();
+
+    head.appendChild(script);
+}
+
+function doNotConsent() {
+    console.log("doNotConsent");
+    deleteCookie();
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
+        return;
+    }
+    window.gtag('consent', 'default', {
+      'ad_storage': 'denied',
+      'analytics_storage': 'denied'
+    });
+}
+
+function doLoadAndConsent() {
+    if (!inGID.get()) {
+        console.error('Empty GA_MEASUREMENT_ID');
+        return;
+    }
+
+    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
+        console.log('Google Analytics loaded');
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = () => {window.dataLayer.push(arguments); }
+
+        window.gtag('js', new Date());
+        window.gtag('config', inGID.get());
+
+        doConsent();
+
+        outConsent.set(true);
+        outShowBanner.set(false);
+        outLoaded.set(true);
+        outTrigger.trigger();
+    });
+}
+
+function doConsent() {
+    console.log("doConsent");
+    if (!window.hasOwnProperty('gtag')) {
+        console.error('Load Google Analytics first');
+        outConsent.set(false);
+        return;
+    }
+    window.gtag('consent', 'update', {
+      'ad_storage': 'granted',
+      'analytics_storage': 'granted'
+    });
+}
+
+function disableAnalytics() {
+    window['ga-disable-' + inGID.get()] = true;
+    console.log('Google Analytics disabled');
+}
+
+
+function readAnalyticsCookieState() {
+    console.log("readAnalyticsCookieState");
+    const toks = document.cookie.split('; ');
+
+    if (!toks.find(row => row.startsWith(COOKIE_NAME)))
+        return 'unset';
+
+    if (toks.some((item) => item.includes(`${COOKIE_NAME}=true`)))
+        return 'consent';
+
+    if (toks.some((item) => item.includes(`${COOKIE_NAME}=false`)))
+        return 'donotconsent';
+
+    return 'unset'
+}
+
+function setAnalyticsCookie(consent) {
+    console.log("setAnalyticsCookie");
+    document.cookie = `${COOKIE_NAME}=${consent}; expires=Fri, 31 Dec 9999 23:59:59 GMT; SameSite=None; Secure`;
+}
+
+function deleteCookie() {
+    console.log("deleteCookie");
+    document.cookie = `${COOKIE_NAME}=; Max-Age=0`
+}
+
+
+function activateGtm(w,d,s,l,i, callback) {
+    console.log("activateGtm");
+    w[l] = w[l] || [];
+    w[l].push({'gtm.start': new Date().getTime(), event:'gtm.js'});
+    let f = d.getElementsByTagName(s)[0],
+    j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : '';
+    j.async = true;
+    j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+    f.parentNode.insertBefore(j,f);
+    j.onload = callback;
+}
+
+inLoad.onTriggered = () => {
+    console.log("inLoad triggered");
+    outLoaded.set(false);
+    outConsent.set(false);
+
+    if (!inGID.get()) {
+        console.error('Empty GA_MEASUREMENT_ID');
+        return;
+    }
+
+    activateGtm(window, document, 'script', 'dataLayer', inGID.get(), () => {
+        console.log('Google Analytics loaded');
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = () => {window.dataLayer.push(arguments); }
+
+        window.gtag('js', new Date());
+        window.gtag('config', inGID.get());
+
+        const state = readAnalyticsCookieState();
+        // console.log('STATE:', state);
+        switch(state) {
+            case 'unset':
+                // doConsent();
+                // setAnalyticsCookie(true);
+                outConsent.set(false);
+                outShowBanner.set(true);
+                break;
+            case 'consent':
+                doConsent();
+                outConsent.set(true);
+                outShowBanner.set(true);
+                break;
+            case 'donotconsent':
+                doNotConsent();
+                // setAnalyticsCookie(false);
+                outConsent.set(false);
+                outShowBanner.set(true);
+                break;
+
+            default:
+                break;
+        }
+        outLoaded.set(true);
+        outTrigger.trigger();
+    });
+};
+
+inConsent.onTriggered = () => {
+    doLoadAndConsent();
+    setAnalyticsCookie(true);
+    outConsent.set(true);
+    outShowBanner.set(false);
+}
+
+inRevokeConsent.onTriggered = () => {
+    doNotConsent()
+    //setAnalyticsCookie(false);
+    deleteCookie();
+    outConsent.set(false);
+    outShowBanner.set(false);
+}
+
+inResetBanner.onTriggered = () => {
+    deleteCookie();
+    doConsent();
+    outConsent.set(true);
+    outShowBanner.set(true);
+}
+
+inDisableAnalytics.onTriggered = () => {
+    disableAnalytics();
+    deleteCookie();
+    outShowBanner.set(false);
+    outConsent.set(false);
+}
+
+};
+
+Ops.User.mick.GoogleAnalytics.prototype = new CABLES.Op();
+
 
 
 window.addEventListener('load', function(event) {

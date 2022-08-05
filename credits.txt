@@ -15,5 +15,5 @@
 - ops by cables user cabpandurles (https://cables.gl/user/cabpandurles)
 - Worley Noise by Stefan Gustavson (https://thebookofshaders.com/edit.php#12/2d-cnoise-2x2x2.frag)
 - ops by cables user kikohs (https://cables.gl/user/kikohs)
-- ops by cables user mick (https://cables.gl/user/mick)
 - NormalMap Shader by moka (https://forum.openframeworks.cc/t/compute-normal-map-from-image/1400/11)
+- ops by cables user mick (https://cables.gl/user/mick)
