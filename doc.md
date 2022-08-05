@@ -62,7 +62,7 @@
 * __installation_input_y__ ```Number```
 * __is_hit_body_string_valid__ ```Number```
 * __is_idle_mode__ ```Number```
-* __is_mobile__ ```Number``` (default Value: `1`)
+* __is_mobile__ ```Number```
 * __lake_displacement_amount__ ```Number```
 * __lake_displacement_noise_texture_scale__ ```Number```
 * __lake_geometry_bounding_maxX__ ```Number```
