@@ -50,6 +50,7 @@
 * __grass_asset_model__ ```Number```
 * __grass_seed__ ```Number```
 * __has_hit__ ```Number```
+* __hide_ui_elements__ ```Number```
 * __hit_body_name_string__ ```String```
 * __hit_x__ ```Number```
 * __hit_y__ ```Number```
