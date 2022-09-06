@@ -21504,6 +21504,7 @@ inExec.onTriggered = function ()
         }
     }
 
+    let oldScene = cgl.frameStore.currentScene || null;
     cgl.frameStore.currentScene = gltf;
 
     nextBefore.trigger();
@@ -21552,7 +21553,7 @@ inExec.onTriggered = function ()
     }
 
     next.trigger();
-    cgl.frameStore.currentScene = null;
+    cgl.frameStore.currentScene = oldScene;
 
     cgl.popModelMatrix();
 
