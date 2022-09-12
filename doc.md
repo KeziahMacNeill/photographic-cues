@@ -100,6 +100,7 @@
 * __scene_transition_0-1__ ```Number```
 * __scene_transition_1-2__ ```Number```
 * __show_intro_text__ ```Number```
+* __show_letterbox__ ```Number```
 * __show_performance__ ```Number```
 * __sky_tex__ ```Texture```
 * __start_experience_button_hover__ ```Number```
