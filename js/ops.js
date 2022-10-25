@@ -215,6 +215,8 @@ function render(time)
     if (!active.get()) return;
     if (cgl.aborted || cgl.canvas.clientWidth === 0 || cgl.canvas.clientHeight === 0) return;
 
+    op.patch.cg = cgl;
+
     const startTime = performance.now();
 
     op.patch.config.fpsLimit = getFpsLimit();
@@ -262,6 +264,8 @@ function render(time)
         CGL.Texture.texturePreviewer.render(CGL.Texture.previewTexture);
     }
     cgl.renderEnd(cgl);
+
+    op.patch.cg = null;
 
     if (clearAlpha.get())
     {
@@ -423,7 +427,7 @@ const
 
     trigger = op.outTrigger("trigger"),
     texOut = op.outTexture("texture_out", null),
-    outRatio = op.outValue("Aspect Ratio");
+    outRatio = op.outNumber("Aspect Ratio");
 
 alphaMaskMethod.setUiAttribs({ "hidePort": true });
 greyscale.setUiAttribs({ "hidePort": true });
@@ -1366,11 +1370,11 @@ const
     multiply = op.inValueFloat("multiply", 1),
     outMouseX = op.outNumber("x", 0),
     outMouseY = op.outNumber("y", 0),
-    mouseDown = op.outValueBool("button down"),
+    mouseDown = op.outBoolNum("button down"),
     mouseClick = op.outTrigger("click"),
     mouseUp = op.outTrigger("Button Up"),
     mouseClickRight = op.outTrigger("click right"),
-    mouseOver = op.outValueBool("mouseOver"),
+    mouseOver = op.outBoolNum("mouseOver"),
     outButton = op.outNumber("button");
 
 op.setPortGroup("Behavior", [relative, normalize, flipY, area, rightClickPrevDef, touchscreen]);
@@ -1417,8 +1421,8 @@ normalize.onChange = function ()
     setValue(mouseX, mouseY);
 };
 
-var mouseX = cgl.canvas.width / 2;
-var mouseY = cgl.canvas.height / 2;
+let mouseX = cgl.canvas.width / 2;
+let mouseY = cgl.canvas.height / 2;
 
 lineX = mouseX;
 lineY = mouseY;
@@ -1681,7 +1685,6 @@ op.setPortGroup("Position", [posX, posY, posZ]);
 op.setPortGroup("Scale", [scale]);
 op.setUiAxisPorts(posX, posY, posZ);
 
-const cgl = op.patch.cgl;
 const vPos = vec3.create();
 const vScale = vec3.create();
 const transMatrix = mat4.create();
@@ -1717,11 +1720,12 @@ render.onTriggered = function ()
 
     if (updateMatrix) doUpdateMatrix();
 
-    cgl.pushModelMatrix();
-    mat4.multiply(cgl.mMatrix, cgl.mMatrix, transMatrix);
+    const cg = op.patch.cg;
+    cg.pushModelMatrix();
+    mat4.multiply(cg.mMatrix, cg.mMatrix, transMatrix);
 
     trigger.trigger();
-    cgl.popModelMatrix();
+    cg.popModelMatrix();
 
     if (CABLES.UI && CABLES.UI.showCanvasTransforms) gui.setTransform(op.id, posX.get(), posY.get(), posZ.get());
 
@@ -2208,35 +2212,33 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    exec=op.inTrigger("Exec"),
-    inX=op.inValue("X"),
-    inY=op.inValue("Y"),
+    exec = op.inTrigger("Exec"),
+    inX = op.inValue("X"),
+    inY = op.inValue("Y"),
     outTrigger = op.outTrigger("Trigger out"),
-    outX=op.outValue("Result X"),
-    outY=op.outValue("Result Y");
+    outX = op.outNumber("Result X"),
+    outY = op.outNumber("Result Y");
 
-const mat=mat4.create();
-const cgl=op.patch.cgl;
+const mat = mat4.create();
+const cgl = op.patch.cgl;
 
-exec.onTriggered=calc;
+exec.onTriggered = calc;
 
 function calc()
 {
-    var x = 2.0 * inX.get() / cgl.canvas.clientWidth - 1;
-    var y = - 2.0 * inY.get() / cgl.canvas.clientHeight + 1;
+    let x = 2.0 * inX.get() / cgl.canvas.clientWidth - 1;
+    let y = -2.0 * inY.get() / cgl.canvas.clientHeight + 1;
 
+    let point3d = vec3.fromValues(x, y, 0);
 
-    var point3d=vec3.fromValues(x,y,0);
+    mat4.mul(mat, cgl.pMatrix, cgl.vMatrix);
 
-    mat4.mul(mat,cgl.pMatrix,cgl.vMatrix);
-
-    mat4.invert(mat,mat);
+    mat4.invert(mat, mat);
 
     vec3.transformMat4(point3d, point3d, mat);
 
-
-    outX.set(point3d[0]*10);
-    outY.set(point3d[1]*10);
+    outX.set(point3d[0] * 10);
+    outY.set(point3d[1] * 10);
     outTrigger.trigger();
 }
 
@@ -2284,7 +2286,6 @@ op.setPortGroup("Pivot", [pivotX, pivotY]);
 op.setPortGroup("Size", [width, height]);
 op.setPortGroup("Structure", [nColumns, nRows]);
 op.toWorkPortsNeedToBeLinked(render);
-
 
 const geom = new CGL.Geometry("rectangle");
 let mesh = null;
@@ -2481,7 +2482,7 @@ const
     inScaleGraph = op.inFloat("Scale", 4),
     inSizeGraph = op.inFloat("Size", 128),
     outCanv = op.outObject("Canvas"),
-    outFPS = op.outValue("FPS");
+    outFPS = op.outNumber("FPS");
 
 const cgl = op.patch.cgl;
 const element = document.createElement("div");
@@ -2939,7 +2940,6 @@ function render()
             if (glQueryData[i].time)
                 currentTimeGPU += glQueryData[i].time;
         }
-        // console.log("glquery count",currentTimeGPU)
     }
 
     if (inShow.get())
@@ -3020,7 +3020,7 @@ const attachments={"IBLLUT_frag":"precision highp float;\nprecision highp int;\n
 const cgl = op.patch.cgl;
 const IS_WEBGL_1 = cgl.glVersion == 1;
 
-const BB = new CGL.BoundingBox();
+const BB = new CABLES.CG.BoundingBox();
 const geometry = new CGL.Geometry("unit cube");
 geometry.vertices = new Float32Array([
     -1.0, 1.0, -1.0,
@@ -3597,8 +3597,8 @@ function realReload(nocache)
                     height.set(newTex.height);
                     ratio.set(newTex.width / newTex.height);
 
-                    if (!newTex.isPowerOfTwo()) op.setUiError("npot", "Texture dimensions not power of two! - Texture filtering will not work in WebGL 1.", 0);
-                    else op.setUiError("npot", null);
+                    // if (!newTex.isPowerOfTwo()) op.setUiError("npot", "Texture dimensions not power of two! - Texture filtering will not work in WebGL 1.", 0);
+                    // else op.setUiError("npot", null);
 
                     if (tex)tex.delete();
                     tex = newTex;
@@ -3685,7 +3685,6 @@ const attachments={"BasicPBR_frag":"precision highp float;\nprecision highp int;
 const cgl = op.patch.cgl;
 // inputs
 const inTrigger = op.inTrigger("render");
-inTrigger.onTriggered = doRender;
 
 const inDiffuseR = op.inFloat("R", Math.random());
 const inDiffuseG = op.inFloat("G", Math.random());
@@ -3726,6 +3725,8 @@ const inSpecularIntensity = op.inFloat("Specular Intensity", 1.0);
 const inLightmapRGBE = op.inBool("Lightmap is RGBE", false);
 const inLightmapIntensity = op.inFloat("Lightmap Intensity", 1.0);
 
+inTrigger.onTriggered = doRender;
+
 // outputs
 const outTrigger = op.outTrigger("Next");
 const shaderOut = op.outObject("Shader");
@@ -3754,9 +3755,21 @@ const lightFragmentBodies = {
     "directional": attachments.light_body_directional_frag,
     "spot": attachments.light_body_spot_frag,
 };
-const createLightFragmentHead = (n) => lightFragmentHead.replace("{{LIGHT_INDEX}}", n);
-const createLightFragmentBody = (n, type) => lightFragmentBodies[type].replace(LIGHT_INDEX_REGEX, n);
+const createLightFragmentHead = (n) => { return lightFragmentHead.replace("{{LIGHT_INDEX}}", n); };
+const createLightFragmentBody = (n, type) =>
+{ return (lightFragmentBodies[type] || "").replace(LIGHT_INDEX_REGEX, n); };
 let currentLightCount = -1;
+const defaultLightStack = [{
+    "type": "point",
+    "position": [5, 5, 5],
+    "color": [1, 1, 1],
+    "specular": [1, 1, 1],
+    "intensity": 120,
+    "attenuation": 0,
+    "falloff": 0.5,
+    "radius": 60,
+    "castLight": 1,
+}];
 
 if (cgl.glVersion == 1)
 {
@@ -3953,12 +3966,12 @@ function buildShader()
         const light = PBRLightStack[i];
         const type = light.type;
 
-        fragmentHead = fragmentHead.concat(createLightFragmentHead(i));
-        fragmentBody = fragmentBody.concat(createLightFragmentBody(i, light.type));
+        fragmentHead = fragmentHead.concat(createLightFragmentHead(i) || "");
+        fragmentBody = fragmentBody.concat(createLightFragmentBody(i, light.type) || "");
     }
 
-    fragmentShader = fragmentShader.replace(FRAGMENT_HEAD_REGEX, fragmentHead);
-    fragmentShader = fragmentShader.replace(FRAGMENT_BODY_REGEX, fragmentBody);
+    fragmentShader = fragmentShader.replace(FRAGMENT_HEAD_REGEX, fragmentHead || "");
+    fragmentShader = fragmentShader.replace(FRAGMENT_BODY_REGEX, fragmentBody || "");
 
     PBRShader.setSource(vertexShader, fragmentShader);
     shaderOut.set(PBRShader);
@@ -3985,25 +3998,50 @@ function buildShader()
 
 function updateLights()
 {
-    if (cgl.frameStore.lightStack && currentLightCount !== cgl.frameStore.lightStack.length)
+    if (cgl.frameStore.lightStack)
     {
-        PBRLightStack = cgl.frameStore.lightStack;
-        buildShader();
+        let changed = currentLightCount !== cgl.frameStore.lightStack.length;
 
-        currentLightCount = cgl.frameStore.lightStack.length;
+        if (!changed)
+        {
+            for (let i = 0; i < cgl.frameStore.lightStack.length; i++)
+            {
+                if (PBRLightStack[i] != cgl.frameStore.lightStack[i])
+                {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            PBRLightStack = cgl.frameStore.lightStack;
+            buildShader();
+
+            currentLightCount = cgl.frameStore.lightStack.length;
+        }
     }
 }
 
 function doRender()
 {
     cgl.pushShader(PBRShader);
+    let useDefaultLight = false;
 
     PBRShader.popTextures();
 
+    let numLights = 0;
+    if (cgl.frameStore.lightStack)numLights = cgl.frameStore.lightStack.length;
+
     if ((!cgl.frameStore.pbrEnvStack || cgl.frameStore.pbrEnvStack.length == 0) &&
-        !inLightmap.isLinked() &&
-        PBRLightStack.length == 0) op.setUiError("noPbrEnv", "No lights found above this op. Please add lights to your patch to see something");
-    else op.setUiError("noPbrEnv", null);
+        !inLightmap.isLinked() && numLights == 0)
+
+    {
+        useDefaultLight = true;
+        op.setUiError("deflight", "Default light is enabled. Please add lights or PBREnvironmentLights to your patch to make this warning disappear.", 1);
+    }
+    else op.setUiError("deflight", null);
 
     if (cgl.frameStore.pbrEnvStack && cgl.frameStore.pbrEnvStack.length > 0 &&
         cgl.frameStore.pbrEnvStack[cgl.frameStore.pbrEnvStack.length - 1].texIBLLUT.tex && cgl.frameStore.pbrEnvStack[cgl.frameStore.pbrEnvStack.length - 1].texDiffIrr.tex && cgl.frameStore.pbrEnvStack[cgl.frameStore.pbrEnvStack.length - 1].texPreFiltered.tex)
@@ -4030,6 +4068,15 @@ function doRender()
         setEnvironmentLighting(false);
     }
 
+    if (useDefaultLight)
+    {
+        const iViewMatrix = mat4.create();
+        mat4.invert(iViewMatrix, cgl.vMatrix);
+
+        defaultLightStack[0].position = [iViewMatrix[12], iViewMatrix[13], iViewMatrix[14]];
+        cgl.frameStore.lightStack = defaultLightStack;
+    }
+
     if (inTexIBLLUT.get())
     {
         setEnvironmentLighting(true);
@@ -4050,6 +4097,8 @@ function doRender()
 
     outTrigger.trigger();
     cgl.popShader();
+
+    if (useDefaultLight) cgl.frameStore.lightStack = [];
 }
 
 
@@ -4072,29 +4121,29 @@ Ops.Math.Speed = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var inExe=op.inTrigger("Update");
-var inVal=op.inValue("Value");
-var result=op.outValue("Speed");
+const
+    inExe = op.inTrigger("Update"),
+    inVal = op.inValue("Value"),
+    result = op.outNumber("Speed");
 
-inVal.alwaysChange=true;
+inVal.alwaysChange = true;
 
-var lastVal=0;
-var lastTime=CABLES.now();
-inExe.onTriggered=update;
+let lastVal = 0;
+let lastTime = CABLES.now();
+inExe.onTriggered = update;
 
 function update()
 {
-    var diff=Math.abs(inVal.get()-lastVal);
-    var diffTime=CABLES.now()-lastTime;
-    
-    var speed=diff*(1000/diffTime);
-    
-    result.set(speed);
-    
-    lastVal=inVal.get();
-    lastTime=CABLES.now();
-}
+    let diff = Math.abs(inVal.get() - lastVal);
+    let diffTime = CABLES.now() - lastTime;
 
+    let speed = diff * (1000 / diffTime);
+
+    result.set(speed);
+
+    lastVal = inVal.get();
+    lastTime = CABLES.now();
+}
 
 
 };
@@ -4119,7 +4168,7 @@ const attachments={};
 const
     number1 = op.inValueFloat("number1", 1),
     number2 = op.inValueFloat("number2", 1),
-    result = op.outValue("result");
+    result = op.outNumber("result");
 
 op.setTitle("+");
 
@@ -4154,24 +4203,24 @@ Ops.Math.Clamp = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const val=op.inValueFloat("val",0.5);
-const min=op.inValueFloat("min",0);
-const max=op.inValueFloat("max",1);
-const ignore=op.inValueBool("ignore outside values");
-const result=op.outValue("result");
+const
+    val = op.inValueFloat("val", 0.5),
+    min = op.inValueFloat("min", 0),
+    max = op.inValueFloat("max", 1),
+    ignore = op.inValueBool("ignore outside values"),
+    result = op.outNumber("result");
 
-val.onChange=min.onChange=max.onChange=clamp;
+val.onChange = min.onChange = max.onChange = clamp;
 
 function clamp()
 {
-    if(ignore.get())
+    if (ignore.get())
     {
-        if(val.get()>max.get()) return;
-        if(val.get()<min.get()) return;
+        if (val.get() > max.get()) return;
+        if (val.get() < min.get()) return;
     }
-    result.set( Math.min(Math.max(val.get(), min.get()), max.get()));
+    result.set(Math.min(Math.max(val.get(), min.get()), max.get()));
 }
-
 
 
 };
@@ -4200,7 +4249,7 @@ const
     next = op.outTrigger("Next"),
     inDivisorUp = op.inValue("Inc factor", 4),
     inDivisorDown = op.inValue("Dec factor", 4),
-    result = op.outValue("Result", 0);
+    result = op.outNumber("Result", 0);
 
 let val = 0;
 let goal = 0;
@@ -4338,9 +4387,10 @@ Ops.Math.Multiply = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const number1 = op.inValueFloat("number1", 1);
-const number2 = op.inValueFloat("number2", 2);
-const result = op.outValue("result");
+const
+    number1 = op.inValueFloat("number1", 1),
+    number2 = op.inValueFloat("number2", 2),
+    result = op.outNumber("result");
 
 op.setTitle("*");
 
@@ -4449,7 +4499,7 @@ const
     new_min = op.inValueFloat("new min", -1),
     new_max = op.inValueFloat("new max", 1),
     easing = op.inValueSelect("Easing", ["Linear", "Smoothstep", "Smootherstep"], "Linear"),
-    result = op.outValue("result", 0);
+    result = op.outNumber("result", 0);
 
 op.setPortGroup("Input Range", [old_min, old_max]);
 op.setPortGroup("Output Range", [new_min, new_max]);
@@ -4563,7 +4613,6 @@ op.setPortGroup("Position", [posX, posY, posZ]);
 op.setPortGroup("Scale", [scale]);
 op.setPortGroup("Rotation", [rotX, rotZ, rotY]);
 
-const cgl = op.patch.cgl;
 const vPos = vec3.create();
 const vScale = vec3.create();
 const transMatrix = mat4.create();
@@ -4573,33 +4622,35 @@ let doScale = false;
 let doTranslate = false;
 
 let translationChanged = true;
-var scaleChanged = true;
-var rotChanged = true;
+let didScaleChanged = true;
+let didRotChanged = true;
 
 render.onTriggered = function ()
 {
+    const cg = op.patch.cg;
+
     let updateMatrix = false;
     if (translationChanged)
     {
         updateTranslation();
         updateMatrix = true;
     }
-    if (scaleChanged)
+    if (didScaleChanged)
     {
         updateScale();
         updateMatrix = true;
     }
-    if (rotChanged)
+    if (didRotChanged)
     {
         updateMatrix = true;
     }
     if (updateMatrix)doUpdateMatrix();
 
-    cgl.pushViewMatrix();
-    mat4.multiply(cgl.vMatrix, cgl.vMatrix, transMatrix);
+    cg.pushViewMatrix();
+    mat4.multiply(cg.vMatrix, cg.vMatrix, transMatrix);
 
     trigger.trigger();
-    cgl.popViewMatrix();
+    cg.popViewMatrix();
 
     if (op.isCurrentUiOp())
         gui.setTransformGizmo(
@@ -4617,7 +4668,7 @@ op.transform3d = function ()
     };
 };
 
-var doUpdateMatrix = function ()
+function doUpdateMatrix()
 {
     mat4.identity(transMatrix);
     if (doTranslate)mat4.translate(transMatrix, transMatrix, vPos);
@@ -4628,7 +4679,7 @@ var doUpdateMatrix = function ()
 
     if (doScale)mat4.scale(transMatrix, transMatrix, vScale);
     rotChanged = false;
-};
+}
 
 function updateTranslation()
 {
@@ -4646,30 +4697,29 @@ function updateScale()
     scaleChanged = false;
 }
 
-const translateChanged = function ()
+function translateChanged()
 {
     translationChanged = true;
-};
+}
 
-var scaleChanged = function ()
+function scaleChanged()
 {
-    scaleChanged = true;
-};
+    didScaleChanged = true;
+}
 
-var rotChanged = function ()
+function rotChanged()
 {
-    rotChanged = true;
-};
+    didRotChanged = true;
+}
 
-
-rotX.onChange = rotChanged;
-rotY.onChange = rotChanged;
+rotX.onChange =
+rotY.onChange =
 rotZ.onChange = rotChanged;
 
 scale.onChange = scaleChanged;
 
-posX.onChange = translateChanged;
-posY.onChange = translateChanged;
+posX.onChange =
+posY.onChange =
 posZ.onChange = translateChanged;
 
 rotX.set(0.0);
@@ -4770,7 +4820,7 @@ defaultValuePort.setUiAttribs({ "hidePort": true, "greyout": true });
 
 // outputs
 const siblingsPort = op.outObject("childs");
-const valuePort = op.outValue("Result", defaultValuePort.get());
+const valuePort = op.outNumber("Result", defaultValuePort.get());
 
 op.toWorkNeedsParent("Ops.Sidebar.Sidebar");
 op.setPortGroup("Range", [minPort, maxPort, stepPort]);
@@ -4903,7 +4953,7 @@ function onTextInputChanged(ev)
     valuePort.set(newValue);
     updateActiveTrack();
     inputValuePort.set(newValue);
-    if (op.isCurrentUiOp()) gui.opParams.show(op); /* update DOM */
+    op.refreshParams();
 }
 
 function onInputValuePortChanged()
@@ -4930,7 +4980,7 @@ function onSetDefaultValueButtonPress()
     setInputFieldValue(newValue);
     valuePort.set(newValue);
     defaultValuePort.set(newValue);
-    if (op.isCurrentUiOp()) gui.opParams.show(op); /* update DOM */
+    op.refreshParams();
 
     updateActiveTrack();
 }
@@ -4943,7 +4993,7 @@ function onSliderInput(ev)
     const inputFloat = parseFloat(ev.target.value);
     valuePort.set(inputFloat);
     inputValuePort.set(inputFloat);
-    if (op.isCurrentUiOp()) gui.opParams.show(op); /* update DOM */
+    op.refreshParams();
 
     updateActiveTrack();
     return false;
@@ -5029,6 +5079,7 @@ function setInputFieldValue(v)
 {
     input.value = v;
 }
+
 function showElement(el)
 {
     if (el)el.style.display = "block";
@@ -5530,32 +5581,31 @@ Ops.String.Concat_v2 = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var string1=op.inString("string1","ABC");
-var string2=op.inString("string2","XYZ");
-var newLine=op.inValueBool("New Line",false);
-var result=op.outString("result");
+const
+    string1 = op.inString("string1", "ABC"),
+    string2 = op.inString("string2", "XYZ"),
+    newLine = op.inValueBool("New Line", false),
+    result = op.outString("result");
 
-newLine.onChange=string2.onChange=string1.onChange=exec;
+newLine.onChange = string2.onChange = string1.onChange = exec;
 exec();
 
 function exec()
 {
-    var s1=string1.get();
-    var s2=string2.get();
-    if(!s1 && !s2)
+    let s1 = string1.get();
+    let s2 = string2.get();
+    if (!s1 && !s2)
     {
-        result.set('');
+        result.set("");
         return;
     }
-    if(!s1)s1='';
-    if(!s2)s2='';
+    if (!s1)s1 = "";
+    if (!s2)s2 = "";
 
-    var nl='';
-    if(s1 && s2 && newLine.get())nl='\n';
-    result.set( String(s1)+nl+String(s2));
+    let nl = "";
+    if (s1 && s2 && newLine.get())nl = "\n";
+    result.set(String(s1) + nl + String(s2));
 }
-
-
 
 
 };
@@ -5619,8 +5669,8 @@ const inGrad = op.inGradient("Gradient"),
     inSize = op.inValueInt("Size", 256),
     tfilter = op.inSwitch("filter", ["nearest", "linear", "mipmap"], "linear"),
     twrap = op.inValueSelect("wrap", ["clamp to edge", "repeat", "mirrored repeat"], "clamp to edge"),
-
     inGradArray = op.inArray("Gradient Array"),
+    inRandom = op.inTriggerButton("Randomize Colors"),
     outTex = op.outTexture("Texture"),
     outColors = op.outArray("Colors", null, 3),
     outColorPos = op.outArray("Colors Pos", null, 1);
@@ -5638,6 +5688,22 @@ twrap.onChange =
 inGrad.set("{\"keys\" : [{\"pos\":0,\"r\":0,\"g\":0,\"b\":0},{\"pos\":0.25,\"r\":0,\"g\":0,\"b\":0},{\"pos\":0.75,\"r\":1,\"g\":1,\"b\":1},{\"pos\":1,\"r\":1,\"g\":1,\"b\":1}]}");
 
 op.onLoaded = update;
+
+inRandom.onTriggered = () =>
+{
+    const keys = parseKeys();
+    if (keys)
+    {
+        keys.forEach((key) =>
+        {
+            key.r = Math.random();
+            key.g = Math.random();
+            key.b = Math.random();
+        });
+        const newKeys = JSON.stringify({ "keys": keys });
+        inGrad.set(newKeys);
+    }
+};
 
 function rgbToOklab(r, g, b)
 {
@@ -5684,22 +5750,15 @@ function lin2srgb(r, g, b)
 
 function update()
 {
-    let width = Math.round(inSize.get());
-    if (width < 4) width = 4;
-    let keys = null;
+    const keys = parseKeys();
+    if (keys) updateGradient(keys);
+}
 
+function parseKeys()
+{
+    let keys = null;
     op.setUiError("nodata", null);
     op.setUiError("parse", null);
-
-    let selectedWrap = 0;
-    let selectedFilter = 0;
-    if (twrap.get() == "repeat") selectedWrap = CGL.Texture.WRAP_REPEAT;
-    else if (twrap.get() == "mirrored repeat") selectedWrap = CGL.Texture.WRAP_MIRRORED_REPEAT;
-    else if (twrap.get() == "clamp to edge") selectedWrap = CGL.Texture.WRAP_CLAMP_TO_EDGE;
-
-    if (tfilter.get() == "nearest") selectedFilter = CGL.Texture.FILTER_NEAREST;
-    else if (tfilter.get() == "linear") selectedFilter = CGL.Texture.FILTER_LINEAR;
-    else if (tfilter.get() == "mipmap") selectedFilter = CGL.Texture.FILTER_MIPMAP;
 
     if (Array.isArray(inGradArray.get()))
     {
@@ -5711,7 +5770,7 @@ function update()
         if (!inGrad.get() || inGrad.get() === "")
         {
             op.setUiError("nodata", "gradient no data");
-            return;
+            return null;
         }
 
         try
@@ -5726,10 +5785,27 @@ function update()
         if (!grad || !grad.keys)
         {
             op.setUiError("nodata", "gradient no data");
-            return;
+            return null;
         }
         keys = grad.keys;
     }
+    return keys;
+}
+
+function updateGradient(keys)
+{
+    let width = Math.round(inSize.get());
+    if (width < 4) width = 4;
+
+    let selectedWrap = 0;
+    let selectedFilter = 0;
+    if (twrap.get() == "repeat") selectedWrap = CGL.Texture.WRAP_REPEAT;
+    else if (twrap.get() == "mirrored repeat") selectedWrap = CGL.Texture.WRAP_MIRRORED_REPEAT;
+    else if (twrap.get() == "clamp to edge") selectedWrap = CGL.Texture.WRAP_CLAMP_TO_EDGE;
+
+    if (tfilter.get() == "nearest") selectedFilter = CGL.Texture.FILTER_NEAREST;
+    else if (tfilter.get() == "linear") selectedFilter = CGL.Texture.FILTER_LINEAR;
+    else if (tfilter.get() == "mipmap") selectedFilter = CGL.Texture.FILTER_MIPMAP;
 
     const tex = new CGL.Texture(cgl);
 
@@ -5969,12 +6045,10 @@ Ops.Vars.VarGetNumber_v2 = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var val=op.outValue("Value");
-op.varName=op.inValueSelect("Variable",[],"",true);
+const val = op.outNumber("Value");
+op.varName = op.inValueSelect("Variable", [], "", true);
 
-
-
-new CABLES.VarGetOpWrapper(op,"number",op.varName,val);
+new CABLES.VarGetOpWrapper(op, "number", op.varName, val);
 
 
 };
@@ -6167,7 +6241,7 @@ function updateName()
             return;
         }
 
-        if (op.isCurrentUiOp()) gui.opParams.show(op);
+        op.refreshParams();
     }
 
     if (!op.patch.namedTriggers[op.varName.get()])
@@ -6178,7 +6252,7 @@ function updateName()
 
     op.setTitle(">" + op.varName.get());
 
-    if (op.isCurrentUiOp()) gui.opParams.show(op);
+    op.refreshParams();
     op.patch.emitEvent("opTriggerNameChanged", op, op.varName.get());
 }
 
@@ -6222,14 +6296,14 @@ Ops.Boolean.Not = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const bool = op.inValueBool("Boolean");
-const outbool = op.outValue("Result");
+const
+    bool = op.inValueBool("Boolean"),
+    outbool = op.outBoolNum("Result");
 
 bool.changeAlways = true;
 
 bool.onChange = function ()
 {
-    // outbool.set( ! (true==bool.get()) );
     outbool.set((!bool.get()));
 };
 
@@ -6253,38 +6327,37 @@ Ops.Gl.Meshes.Cross = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var render = op.inTrigger('Render');
-var size = op.inValue('Size');
-var thick = op.inValue('Thickness');
-var target = op.inValueBool('Crosshair');
-var active = op.inValueBool('Active',true);
+const
+    render = op.inTrigger("Render"),
+    size = op.inValue("Size"),
+    thick = op.inValue("Thickness"),
+    target = op.inValueBool("Crosshair"),
+    active = op.inValueBool("Active", true),
 
-var trigger = op.outTrigger('Next');
-var geomOut = op.outObject("Geometry");
+    trigger = op.outTrigger("Next"),
+    geomOut = op.outObject("Geometry");
 
-
-var cgl= op.patch.cgl;
-var geom = null;
-var mesh = null;
+const cgl = op.patch.cgl;
+let geom = null;
+let mesh = null;
 
 size.set(1.0);
 thick.set(0.25);
 
-render.onTriggered=function()
+render.onTriggered = function ()
 {
-    if(!mesh)buildMesh();
-    if(active.get() && mesh) mesh.render(cgl.getShader());
+    if (!mesh)buildMesh();
+    if (active.get() && mesh) mesh.render(cgl.getShader());
     trigger.trigger();
 };
 
-
 function buildMesh()
 {
-    if(!geom)geom=new CGL.Geometry("cubemesh");
+    if (!geom)geom = new CGL.Geometry("cubemesh");
     geom.clear();
 
-    var ext = size.get()/2.0;
-    var thi = thick.get();
+    const ext = size.get() / 2.0;
+    const thi = thick.get();
 
     if (thi < 0.0)
     {
@@ -6301,134 +6374,132 @@ function buildMesh()
         thi = 0.0;
     }
 
-    //center verts
-    var cx = thi;
-    var cy = thi ;
+    // center verts
+    let cx = thi;
+    let cy = thi;
 
-    //o is outer verts from center
-    var ox = ext ;
-    var oy = ext ;
-
+    // o is outer verts from center
+    let ox = ext;
+    let oy = ext;
 
     geom.vertices = [
-        //center piece
-        -cx,-cy,0,          //0
-        -cx,cy,0,           //1
-        cx, cy,0,           //2
-        cx,-cy,0,           //3
+        // center piece
+        -cx, -cy, 0, // 0
+        -cx, cy, 0, // 1
+        cx, cy, 0, // 2
+        cx, -cy, 0, // 3
 
-        //left piece
-        -ox,-cy,0,          //4
-        -ox,cy,0,           //5
-        -cx,cy,0,           //6
-        -cx,-cy,0,          //7
+        // left piece
+        -ox, -cy, 0, // 4
+        -ox, cy, 0, // 5
+        -cx, cy, 0, // 6
+        -cx, -cy, 0, // 7
 
-        //right piece
-        cx,-cy,0,           //8
-        cx,cy,0,            //9
-        ox,cy,0,            //10
-        ox,-cy,0,           //11
+        // right piece
+        cx, -cy, 0, // 8
+        cx, cy, 0, // 9
+        ox, cy, 0, // 10
+        ox, -cy, 0, // 11
 
-        //top piece
-        -cx,cy,0,           //12
-        -cx,oy,0,           //13
-        cx, oy,0,           //14
-        cx,cy,0,            //15
+        // top piece
+        -cx, cy, 0, // 12
+        -cx, oy, 0, // 13
+        cx, oy, 0, // 14
+        cx, cy, 0, // 15
 
-        //bottom piece
-        -cx,-oy,0,          //12
-        -cx,-cy,0,          //13
-        cx, -cy,0,          //14
-        cx,-oy,0            //15
+        // bottom piece
+        -cx, -oy, 0, // 12
+        -cx, -cy, 0, // 13
+        cx, -cy, 0, // 14
+        cx, -oy, 0 // 15
     ];
 
-    var texCoords = [];
+    let texCoords = [];
     texCoords.length = (geom.vertices.length / 3.0) * 2.0;
 
-    for (var i = 0; i < geom.vertices.length;i += 3)
+    for (let i = 0; i < geom.vertices.length; i += 3)
     {
-        var vx = (geom.vertices[i] / (ox) + 1) / 2;
-        var vy = (geom.vertices[i+1] / (oy) + 1) / 2;
-        var index = (i / 3.0) * 2.0;
+        let vx = (geom.vertices[i] / (ox) + 1) / 2;
+        let vy = (geom.vertices[i + 1] / (oy) + 1) / 2;
+        let index = (i / 3.0) * 2.0;
 
         texCoords[index] = vx;
-        texCoords[index+1] = vy;
+        texCoords[index + 1] = vy;
     }
 
     geom.setTexCoords(texCoords);
-    geom.tangents=geom.vertices.map(function (v,i){return i%3==0?1:0});
-    geom.biTangents=geom.vertices.map(function(v,i){return i%3==1?1:0});
-    geom.vertexNormals=geom.vertices.map(function(v,i){return i%3==2?1:0});
+    geom.tangents = geom.vertices.map(function (v, i) { return i % 3 == 0 ? 1 : 0; });
+    geom.biTangents = geom.vertices.map(function (v, i) { return i % 3 == 1 ? 1 : 0; });
+    geom.vertexNormals = geom.vertices.map(function (v, i) { return i % 3 == 2 ? 1 : 0; });
 
     geom.vertexNormals = [
-        //center piece
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
+        // center piece
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
 
-        //left
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        //right
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        //top
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        //bottom
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0,
-        0.0,0.0,1.0
-        ];
+        // left
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        // right
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        // top
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        // bottom
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 1.0
+    ];
 
-    if(target.get() == true )
+    if (target.get() == true)
     {
-        //draws a crosshair
+        // draws a crosshair
         geom.verticesIndices = [
-        //left
-        4,5,6,      4,6,7,
-        //right
-        8,9,10,     8,10,11,
-        //top
-        12,13,14,   12,14,15,
-        //bottom
-        16,17,18,   16,18,19
+        // left
+            4, 5, 6, 4, 6, 7,
+            // right
+            8, 9, 10, 8, 10, 11,
+            // top
+            12, 13, 14, 12, 14, 15,
+            // bottom
+            16, 17, 18, 16, 18, 19
         ];
     }
     else
     {
-        //draws a solid cross
+        // draws a solid cross
         geom.verticesIndices = [
-        //center
-        0,1,2, 0,2,3,
-        //left
-        4,5,6,      4,6,7,
-        //right
-        8,9,10,     8,10,11,
-        //top
-        12,13,14,   12,14,15,
-        //bottom
-        16,17,18,   16,18,19
+        // center
+            0, 1, 2, 0, 2, 3,
+            // left
+            4, 5, 6, 4, 6, 7,
+            // right
+            8, 9, 10, 8, 10, 11,
+            // top
+            12, 13, 14, 12, 14, 15,
+            // bottom
+            16, 17, 18, 16, 18, 19
         ];
     }
 
-    mesh=new CGL.Mesh(cgl,geom);
+    mesh = new CGL.Mesh(cgl, geom);
     geomOut.set(null);
     geomOut.set(geom);
-
 }
 
 function buildMeshLater()
 {
-    if(mesh)mesh.dispose();
+    if (mesh)mesh.dispose();
     mesh = null;
 }
 
@@ -6895,56 +6966,56 @@ Ops.Array.ArrayUnpack3 = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const inArray1=op.inArray("Array in xyz"),
-    outArray1=op.outArray("Array 1 out"),
-    outArray2=op.outArray("Array 2 out"),
-    outArray3=op.outArray("Array 3 out"),
+const inArray1 = op.inArray("Array in xyz"),
+    outArray1 = op.outArray("Array 1 out"),
+    outArray2 = op.outArray("Array 2 out"),
+    outArray3 = op.outArray("Array 3 out"),
     outArrayLength = op.outNumber("Array lengths");
 
-var showingError = false;
+let showingError = false;
 
-const arr1=[];
-const arr2=[];
-const arr3=[];
+const arr1 = [];
+const arr2 = [];
+const arr3 = [];
 
 inArray1.onChange = update;
 
 function update()
 {
-    var array1=inArray1.get();
+    let array1 = inArray1.get();
 
-    if(!array1)
+    if (!array1)
     {
         outArray1.set(null);
         return;
     }
 
-    if(array1.length % 3 !== 0)
+    if (array1.length % 3 !== 0)
     {
-        if(!showingError)
+        if (!showingError)
         {
-            op.uiAttr({error:"Arrays length not divisible by 3 !"});
+            op.uiAttr({ "error": "Arrays length not divisible by 3 !" });
             outArrayLength.set(0);
             showingError = true;
         }
         return;
     }
 
-    if(showingError)
+    if (showingError)
     {
         showingError = false;
-        op.uiAttr({error:null});
+        op.uiAttr({ "error": null });
     }
 
-    arr1.length = Math.floor(array1.length/3);
-    arr2.length = Math.floor(array1.length/3);
-    arr3.length = Math.floor(array1.length/3);
+    arr1.length = Math.floor(array1.length / 3);
+    arr2.length = Math.floor(array1.length / 3);
+    arr3.length = Math.floor(array1.length / 3);
 
-    for(var i=0;i<array1.length/3;i++)
+    for (let i = 0; i < array1.length / 3; i++)
     {
-        arr1[i] = array1[i*3];
-        arr2[i] = array1[i*3+1];
-        arr3[i] = array1[i*3+2];
+        arr1[i] = array1[i * 3];
+        arr2[i] = array1[i * 3 + 1];
+        arr3[i] = array1[i * 3 + 2];
     }
 
     outArray1.set(null);
@@ -6955,7 +7026,6 @@ function update()
     outArray3.set(arr3);
     outArrayLength.set(arr1.length);
 }
-
 
 
 };
@@ -7077,35 +7147,32 @@ Ops.String.FilterValidString = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-
 const
-    inStr=op.inString("String",""),
-    checkNull=op.inBool("Invalid if null",true),
-    checkUndefined=op.inBool("Invalid if undefined",true),
-    checkEmpty=op.inBool("Invalid if empty",true),
-    checkZero=op.inBool("Invalid if 0",true),
-    outStr=op.outString("Last Valid String"),
-    result=op.outBool("Is Valid");
+    inStr = op.inString("String", ""),
+    checkNull = op.inBool("Invalid if null", true),
+    checkUndefined = op.inBool("Invalid if undefined", true),
+    checkEmpty = op.inBool("Invalid if empty", true),
+    checkZero = op.inBool("Invalid if 0", true),
+    outStr = op.outString("Last Valid String"),
+    result = op.outBool("Is Valid");
 
-inStr.onChange=
-checkNull.onChange=
-checkUndefined.onChange=
-checkEmpty.onChange=
-function()
+inStr.onChange =
+checkNull.onChange =
+checkUndefined.onChange =
+checkEmpty.onChange =
+function ()
 {
-    const str=inStr.get();
-    var r=true;
+    const str = inStr.get();
+    let r = true;
 
-    if(r===false)r=false;
-    if(r && checkZero.get() && (str===0 || str==="0")) r=false;
-    if(r && checkNull.get() && str===null) r=false;
-    if(r && checkUndefined.get() && str===undefined) r=false;
-    if(r && checkEmpty.get() && str==="") r=false;
-
-    if(r)outStr.set(str);
+    if (r === false)r = false;
+    if (r && checkZero.get() && (str === 0 || str === "0")) r = false;
+    if (r && checkNull.get() && str === null) r = false;
+    if (r && checkUndefined.get() && str === undefined) r = false;
+    if (r && checkEmpty.get() && str === "") r = false;
 
     result.set(r);
-
+    if (r)outStr.set(str);
 };
 
 
@@ -7279,16 +7346,17 @@ const attachments={};
 const
     setValuePort = op.inTriggerButton("Set"),
     valuePort = op.inValueFloat("Number"),
-    outNext=op.outTrigger("Next"),
-    outValuePort = op.outValue("Out Value");
+    outNext = op.outTrigger("Next"),
+    outValuePort = op.outNumber("Out Value");
 
 outValuePort.changeAlways = true;
 
-setValuePort.onTriggered = function()
+setValuePort.onTriggered = function ()
 {
     outValuePort.set(valuePort.get());
     outNext.trigger();
 };
+
 
 };
 
@@ -7309,18 +7377,18 @@ Ops.Math.FlipSign = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-
 const
-    inval=op.inValueFloat("Value",1),
-    result=op.outValue("Result");
+    inval = op.inValueFloat("Value", 1),
+    result = op.outNumber("Result");
 
-inval.onChange=update;
+inval.onChange = update;
 update();
 
 function update()
 {
-    result.set(inval.get()*-1);
+    result.set(inval.get() * -1);
 }
+
 
 };
 
@@ -7344,7 +7412,7 @@ const attachments={};
 const
     str1 = op.inString("String 1"),
     str2 = op.inString("String 2"),
-    result = op.outValueBool("Result");
+    result = op.outBoolNum("Result");
 
 str1.onChange =
 str2.onChange =
@@ -7373,26 +7441,24 @@ Ops.Boolean.TriggerChangedTrue = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
+let val = op.inValueBool("Value", false);
+let next = op.outTrigger("Next");
+let oldVal = 0;
 
-var val=op.inValueBool("Value",false);
-
-var next=op.outTrigger("Next");
-
-var oldVal=0;
-
-val.onChange=function()
+val.onChange = function ()
 {
-    var newVal=val.get();
-    if(!oldVal && newVal)
+    let newVal = val.get();
+    if (!oldVal && newVal)
     {
-        oldVal=true;
+        oldVal = true;
         next.trigger();
     }
     else
     {
-        oldVal=false;
+        oldVal = false;
     }
 };
+
 
 };
 
@@ -7798,7 +7864,7 @@ const
     playPause = op.inValueBool("Play", true),
     reset = op.inTriggerButton("Reset"),
     inSyncTimeline = op.inValueBool("Sync to timeline", false),
-    outTime = op.outValue("Time");
+    outTime = op.outNumber("Time");
 
 op.setPortGroup("Controls", [playPause, reset, inSpeed]);
 
@@ -7910,7 +7976,7 @@ const
     inColor = op.inArray("Colors", 4),
     inTexCoords = op.inArray("TexCoords", 2),
     outTrigger = op.outTrigger("Trigger Out"),
-    outNum = op.outValue("Num");
+    outNum = op.outNumber("Num");
 
 op.setPortGroup("Limit Number of Instances", [inLimit, doLimit]);
 op.setPortGroup("Parameters", [inScales, inRot, inTranslates, inRotMeth]);
@@ -8138,8 +8204,6 @@ function doRender()
 
     if (mesh.numInstances > 0) mesh.render(cgl.getShader());
 
-    // console.log(mesh.name,mesh._attributes);
-
     outTrigger.trigger();
 
     mod.unbind();
@@ -8168,7 +8232,7 @@ const attachments={};
 const
     number1 = op.inValue("number1", 1),
     number2 = op.inValue("number2", 1),
-    result = op.outValue("result");
+    result = op.outNumber("result");
 
 op.setTitle("-");
 
@@ -8263,7 +8327,7 @@ function setDefaultValue()
 
     defaultValuePort.set(defaultValue);
     valuePort.set(defaultValue);
-    if (CABLES.UI && op.isCurrentUiOp()) gui.opParams.show(op); /* update DOM */
+    op.refreshParams();
 }
 
 function onInputClick()
@@ -8284,7 +8348,7 @@ function onInputClick()
         valuePort.set(false);
         inputValuePort.set(false);
     }
-    if (CABLES.UI && op.isCurrentUiOp()) gui.opParams.show(op); /* update DOM */
+    op.refreshParams();
 }
 
 function onInputValuePortChanged()
@@ -8430,7 +8494,7 @@ Ops.Gl.ShaderEffects.VertexDisplacementMap_v4 = function()
 {
 CABLES.Op.apply(this,arguments);
 const op=this;
-const attachments={"vertdisplace_body_vert":"\nvec2 MOD_tc=texCoord;\n\n#ifdef MOD_COORD_MESHXY\n    MOD_tc=pos.xy;\n#endif\n#ifdef MOD_COORD_MESHXZ\n    MOD_tc=pos.xz;\n#endif\n\n\n#ifdef MOD_FLIP_Y\n    MOD_tc.y=1.0-MOD_tc.y;\n#endif\n#ifdef MOD_FLIP_X\n    MOD_tc.x=1.0-MOD_tc.x;\n#endif\n#ifdef MOD_FLIP_XY\n    MOD_tc=1.0-MOD_tc;\n#endif\n\nMOD_tc*=MOD_scale;\n\nvec4 MOD_sample=texture2D( MOD_texture, vec2(MOD_tc.x+MOD_offsetX,MOD_tc.y+MOD_offsetY) );\nvec3 MOD_disp;\n\n#ifdef MOD_INPUT_R\n    MOD_disp=vec3(MOD_sample.r);\n#endif\n#ifdef MOD_INPUT_G\n    MOD_disp=vec3(MOD_sample.g);\n#endif\n#ifdef MOD_INPUT_B\n    MOD_disp=vec3(MOD_sample.b);\n#endif\n#ifdef MOD_INPUT_A\n    MOD_disp=vec3(MOD_sample.a);\n#endif\n#ifdef MOD_INPUT_RGB\n    MOD_disp=MOD_sample.rgb;\n#endif\n#ifdef MOD_INPUT_LUMI\n    MOD_disp=vec3(dot(vec3(0.2126,0.7152,0.0722), MOD_sample.rgb));\n#endif\n\n\n\n#ifdef MOD_HEIGHTMAP_INVERT\n   MOD_disp=1.0-MOD_disp;\n#endif\n// #ifdef MOD_HEIGHTMAP_NORMALIZE\n//   MOD_disp-=0.5;\n//   MOD_disp*=2.0;\n// #endif\n\n\n#ifdef MOD_HEIGHTMAP_NORMALIZE\n    MOD_disp=(MOD_disp-0.5)*2.0;\n    // MOD_disp=(MOD_disp-0.5)*-1.0+0.5;\n#endif\n\n\nfloat MOD_zero=0.0;\n\n#ifdef MOD_MODE_DIV\n    MOD_zero=1.0;\n#endif\n#ifdef MOD_MODE_MUL\n    MOD_zero=1.0;\n#endif\n\n\n\nvec3 MOD_mask=vec3(1.0);\n\n#ifdef MOD_AXIS_X\n    MOD_mask=vec3(1.,0.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_Y\n    MOD_mask=vec3(0.,1.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_Z\n    MOD_mask=vec3(0.,0.,1.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_XY\n    MOD_mask=vec3(1.,1.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_XYZ\n    MOD_mask=vec3(1.,1.,1.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n\n\n// MOD_disp=smoothstep(-1.,1.,MOD_disp*MOD_disp*MOD_disp);\n// MOD_disp=MOD_disp*MOD_disp*MOD_disp;\n\n// #ifdef MOD_FLIP_Y\n//     MOD_mask.y=1.0-MOD_mask.y;\n// #endif\n// #ifdef MOD_FLIP_X\n//     MOD_mask.x=1.0-MOD_mask.x;\n// #endif\n// #ifdef MOD_FLIP_XY\n//     MOD_mask.xy=1.0-MOD_mask.xy;\n// #endif\n\n\n\n#ifdef MOD_MODE_DIV\n    pos.xyz/=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_MUL\n    pos.xyz*=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_ADD\n    pos.xyz+=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_NORMAL\n\n    vec3 MOD_t=norm;\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_TANGENT\n    MOD_disp*=-1.0;\n\n    vec3 MOD_t=attrTangent;\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_BITANGENT\n    MOD_disp*=-1.0;\n    vec3 MOD_t=attrBiTangent;\n\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_VERTCOL\n    vec3 MOD_t=attrVertColor.rgb*vec3(2.0)-vec3(1.0);\n\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n\n// pos.y*=-1.0;\n    // pos.xy+=vec2(MOD_texVal*MOD_extrude)*normalize(pos.xy);\n\n\nMOD_displHeightMapColor=MOD_disp;\n\n\n#ifdef CALC_NORMALS\n    norm+=MOD_calcNormal(MOD_texture,MOD_tc);\n#endif","vertdisplace_head_vert":"OUT vec3 MOD_displHeightMapColor;\n\n#ifdef MOD_MODE_VERTCOL\n#ifndef VERTEX_COLORS\nIN vec4 attrVertColor;\n#endif\n#endif\n\n// mat4 rotationX( in float angle ) {\n// \treturn mat4(\t1.0,\t\t0,\t\t\t0,\t\t\t0,\n// \t\t\t \t\t0, \tcos(angle),\t-sin(angle),\t\t0,\n// \t\t\t\t\t0, \tsin(angle),\t cos(angle),\t\t0,\n// \t\t\t\t\t0, \t\t\t0,\t\t\t  0, \t\t1);\n// }\n\n// mat4 rotationY( in float angle ) {\n// \treturn mat4(\tcos(angle),\t\t0,\t\tsin(angle),\t0,\n// \t\t\t \t\t\t\t0,\t\t1.0,\t\t\t 0,\t0,\n// \t\t\t\t\t-sin(angle),\t0,\t\tcos(angle),\t0,\n// \t\t\t\t\t\t\t0, \t\t0,\t\t\t\t0,\t1);\n// }\n\n// mat4 rotationZ( in float angle ) {\n// \treturn mat4(\tcos(angle),\t\t-sin(angle),\t0,\t0,\n// \t\t\t \t\tsin(angle),\t\tcos(angle),\t\t0,\t0,\n// \t\t\t\t\t\t\t0,\t\t\t\t0,\t\t1,\t0,\n// \t\t\t\t\t\t\t0,\t\t\t\t0,\t\t0,\t1);\n// }\n\n\nvec3 MOD_calcNormal(sampler2D tex,vec2 uv)\n{\n    float strength=13.0;\n    float texelSize=1.0/512.0;\n\n    float tl = abs(texture(tex, uv + texelSize * vec2(-1.0, -1.0)).x);   // top left\n    float  l = abs(texture(tex, uv + texelSize * vec2(-1.0,  0.0)).x);   // left\n    float bl = abs(texture(tex, uv + texelSize * vec2(-1.0,  1.0)).x);   // bottom left\n    float  t = abs(texture(tex, uv + texelSize * vec2( 0.0, -1.0)).x);   // top\n    float  b = abs(texture(tex, uv + texelSize * vec2( 0.0,  1.0)).x);   // bottom\n    float tr = abs(texture(tex, uv + texelSize * vec2( 1.0, -1.0)).x);   // top right\n    float  r = abs(texture(tex, uv + texelSize * vec2( 1.0,  0.0)).x);   // right\n    float br = abs(texture(tex, uv + texelSize * vec2( 1.0,  1.0)).x);   // bottom right\n\n    //     // Compute dx using Sobel:\n    //     //           -1 0 1\n    //     //           -2 0 2\n    //     //           -1 0 1\n    float dX = tr + 2.0*r + br -tl - 2.0*l - bl;\n\n    //     // Compute dy using Sobel:\n    //     //           -1 -2 -1\n    //     //            0  0  0\n    //     //            1  2  1\n    float dY = bl + 2.0*b + br -tl - 2.0*t - tr;\n\n    //     // Build the normalized normal\n\n    vec3 N = normalize(vec3(dX,dY, 1.0 / strength));\n\n    //     //convert (-1.0 , 1.0) to (0.0 , 1.0), if needed\n    N= N * 0.5 + 0.5;\n\n   return N;\n}\n",};
+const attachments={"vertdisplace_body_vert":"\nvec2 MOD_tc=texCoord;\n\n#ifdef MOD_COORD_MESHXY\n    MOD_tc=pos.xy;\n#endif\n#ifdef MOD_COORD_MESHXZ\n    MOD_tc=pos.xz;\n#endif\n\n\n#ifdef MOD_FLIP_Y\n    MOD_tc.y=1.0-MOD_tc.y;\n#endif\n#ifdef MOD_FLIP_X\n    MOD_tc.x=1.0-MOD_tc.x;\n#endif\n#ifdef MOD_FLIP_XY\n    MOD_tc=1.0-MOD_tc;\n#endif\n\nMOD_tc*=MOD_scale;\n\nvec4 MOD_sample=texture( MOD_texture, vec2(MOD_tc.x+MOD_offsetX,MOD_tc.y+MOD_offsetY) );\nvec3 MOD_disp;\n\n#ifdef MOD_INPUT_R\n    MOD_disp=vec3(MOD_sample.r);\n#endif\n#ifdef MOD_INPUT_G\n    MOD_disp=vec3(MOD_sample.g);\n#endif\n#ifdef MOD_INPUT_B\n    MOD_disp=vec3(MOD_sample.b);\n#endif\n#ifdef MOD_INPUT_A\n    MOD_disp=vec3(MOD_sample.a);\n#endif\n#ifdef MOD_INPUT_RGB\n    MOD_disp=MOD_sample.rgb;\n#endif\n#ifdef MOD_INPUT_LUMI\n    MOD_disp=vec3(dot(vec3(0.2126,0.7152,0.0722), MOD_sample.rgb));\n#endif\n\n\n\n#ifdef MOD_HEIGHTMAP_INVERT\n   MOD_disp=1.0-MOD_disp;\n#endif\n// #ifdef MOD_HEIGHTMAP_NORMALIZE\n//   MOD_disp-=0.5;\n//   MOD_disp*=2.0;\n// #endif\n\n\n#ifdef MOD_HEIGHTMAP_NORMALIZE\n    MOD_disp=(MOD_disp-0.5)*2.0;\n    // MOD_disp=(MOD_disp-0.5)*-1.0+0.5;\n#endif\n\n\nfloat MOD_zero=0.0;\n\n#ifdef MOD_MODE_DIV\n    MOD_zero=1.0;\n#endif\n#ifdef MOD_MODE_MUL\n    MOD_zero=1.0;\n#endif\n\n\n\nvec3 MOD_mask=vec3(1.0);\n\n#ifdef MOD_AXIS_X\n    MOD_mask=vec3(1.,0.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_Y\n    MOD_mask=vec3(0.,1.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_Z\n    MOD_mask=vec3(0.,0.,1.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_XY\n    MOD_mask=vec3(1.,1.,0.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n#ifdef MOD_AXIS_XYZ\n    MOD_mask=vec3(1.,1.,1.);\n    MOD_disp*=MOD_mask*MOD_extrude;\n#endif\n\n\n// MOD_disp=smoothstep(-1.,1.,MOD_disp*MOD_disp*MOD_disp);\n// MOD_disp=MOD_disp*MOD_disp*MOD_disp;\n\n// #ifdef MOD_FLIP_Y\n//     MOD_mask.y=1.0-MOD_mask.y;\n// #endif\n// #ifdef MOD_FLIP_X\n//     MOD_mask.x=1.0-MOD_mask.x;\n// #endif\n// #ifdef MOD_FLIP_XY\n//     MOD_mask.xy=1.0-MOD_mask.xy;\n// #endif\n\n\n\n#ifdef MOD_MODE_DIV\n    pos.xyz/=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_MUL\n    pos.xyz*=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_ADD\n    pos.xyz+=MOD_disp*MOD_mask;\n#endif\n\n#ifdef MOD_MODE_NORMAL\n\n    vec3 MOD_t=norm;\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_TANGENT\n    MOD_disp*=-1.0;\n\n    vec3 MOD_t=attrTangent;\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_BITANGENT\n    MOD_disp*=-1.0;\n    vec3 MOD_t=attrBiTangent;\n\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n#ifdef MOD_MODE_VERTCOL\n    vec3 MOD_t=attrVertColor.rgb*vec3(2.0)-vec3(1.0);\n\n    #ifdef MOD_SMOOTHSTEP\n        MOD_t=smoothstep(-1.,1.,MOD_t);\n    #endif\n\n    pos.xyz+=MOD_t*MOD_disp*MOD_mask;\n\n#endif\n\n\n// pos.y*=-1.0;\n    // pos.xy+=vec2(MOD_texVal*MOD_extrude)*normalize(pos.xy);\n\n\nMOD_displHeightMapColor=MOD_disp;\n\n\n#ifdef CALC_NORMALS\n    norm+=MOD_calcNormal(MOD_texture,MOD_tc);\n#endif","vertdisplace_head_vert":"OUT vec3 MOD_displHeightMapColor;\n\n#ifdef MOD_MODE_VERTCOL\n#ifndef VERTEX_COLORS\nIN vec4 attrVertColor;\n#endif\n#endif\n\n// mat4 rotationX( in float angle ) {\n// \treturn mat4(\t1.0,\t\t0,\t\t\t0,\t\t\t0,\n// \t\t\t \t\t0, \tcos(angle),\t-sin(angle),\t\t0,\n// \t\t\t\t\t0, \tsin(angle),\t cos(angle),\t\t0,\n// \t\t\t\t\t0, \t\t\t0,\t\t\t  0, \t\t1);\n// }\n\n// mat4 rotationY( in float angle ) {\n// \treturn mat4(\tcos(angle),\t\t0,\t\tsin(angle),\t0,\n// \t\t\t \t\t\t\t0,\t\t1.0,\t\t\t 0,\t0,\n// \t\t\t\t\t-sin(angle),\t0,\t\tcos(angle),\t0,\n// \t\t\t\t\t\t\t0, \t\t0,\t\t\t\t0,\t1);\n// }\n\n// mat4 rotationZ( in float angle ) {\n// \treturn mat4(\tcos(angle),\t\t-sin(angle),\t0,\t0,\n// \t\t\t \t\tsin(angle),\t\tcos(angle),\t\t0,\t0,\n// \t\t\t\t\t\t\t0,\t\t\t\t0,\t\t1,\t0,\n// \t\t\t\t\t\t\t0,\t\t\t\t0,\t\t0,\t1);\n// }\n\n\nvec3 MOD_calcNormal(sampler2D tex,vec2 uv)\n{\n    float strength=13.0;\n    float texelSize=1.0/512.0;\n\n    float tl = abs(texture(tex, uv + texelSize * vec2(-1.0, -1.0)).x);   // top left\n    float  l = abs(texture(tex, uv + texelSize * vec2(-1.0,  0.0)).x);   // left\n    float bl = abs(texture(tex, uv + texelSize * vec2(-1.0,  1.0)).x);   // bottom left\n    float  t = abs(texture(tex, uv + texelSize * vec2( 0.0, -1.0)).x);   // top\n    float  b = abs(texture(tex, uv + texelSize * vec2( 0.0,  1.0)).x);   // bottom\n    float tr = abs(texture(tex, uv + texelSize * vec2( 1.0, -1.0)).x);   // top right\n    float  r = abs(texture(tex, uv + texelSize * vec2( 1.0,  0.0)).x);   // right\n    float br = abs(texture(tex, uv + texelSize * vec2( 1.0,  1.0)).x);   // bottom right\n\n    //     // Compute dx using Sobel:\n    //     //           -1 0 1\n    //     //           -2 0 2\n    //     //           -1 0 1\n    float dX = tr + 2.0*r + br -tl - 2.0*l - bl;\n\n    //     // Compute dy using Sobel:\n    //     //           -1 -2 -1\n    //     //            0  0  0\n    //     //            1  2  1\n    float dY = bl + 2.0*b + br -tl - 2.0*t - tr;\n\n    //     // Build the normalized normal\n\n    vec3 N = normalize(vec3(dX,dY, 1.0 / strength));\n\n    //     //convert (-1.0 , 1.0) to (0.0 , 1.0), if needed\n    N= N * 0.5 + 0.5;\n\n   return N;\n}\n",};
 const
     render = op.inTrigger("Render"),
 
@@ -8557,22 +8621,6 @@ function updateDefines()
     mod.toggleDefine("MOD_COORD_MESHXY", src.get() == "Mesh XY");
     mod.toggleDefine("MOD_COORD_MESHXZ", src.get() == "Mesh XZ");
 
-    // mod.toggleDefine("MOD_DISPLACE_METH_MULXYZ", meth.get() == "mul xyz");
-    // mod.toggleDefine("MOD_DISPLACE_METH_MULXY", meth.get() == "mul xy");
-    // mod.toggleDefine("MOD_DISPLACE_METH_ADDZ", meth.get() == "add z");
-    // mod.toggleDefine("MOD_DISPLACE_METH_ADDY", meth.get() == "add y");
-    // mod.toggleDefine("MOD_DISPLACE_METH_ADDX", meth.get() == "add x");
-    // mod.toggleDefine("MOD_DISPLACE_METH_ADDXY", meth.get() == "add xy");
-    // mod.toggleDefine("MOD_DISPLACE_METH_SUBX", meth.get() == "sub x");
-    // mod.toggleDefine("MOD_DISPLACE_METH_MULY", meth.get() == "mul y");
-    // mod.toggleDefine("MOD_DISPLACE_METH_MULZ", meth.get() == "mul z");
-    // mod.toggleDefine("MOD_DISPLACE_METH_NORMAL", meth.get() == "normal");
-    // mod.toggleDefine("MOD_DISPLACE_METH_NORMAL_XY", meth.get() == "normal xy");
-    // mod.toggleDefine("MOD_DISPLACE_METH_NORMAL2", meth.get() == "normal2");
-
-    // mod.toggleDefine("MOD_DISPLACE_METH_NORMAL_RGB", meth.get() == "normal RGB");
-    // mod.toggleDefine("MOD_DISPLACE_METH_14", meth.get() == "m14");
-
     mod.toggleDefine("CALC_NORMALS", calcNormals.get());
 }
 
@@ -8580,7 +8628,6 @@ function dorender()
 {
     mod.bind();
 
-    if (texture.get() && texture.get().deleted)console.log("deleted!!!");
     if (texture.get() && !texture.get().deleted) mod.pushTexture("MOD_texture", texture.get());
     else mod.pushTexture("MOD_texture", CGL.Texture.getEmptyTexture(cgl));
 
@@ -8955,17 +9002,19 @@ const
     outGeometry = op.outObject("geometry", null, "geometry"),
     UP = vec3.fromValues(0, 1, 0),
     RIGHT = vec3.fromValues(1, 0, 0);
+
 let
     geom = new CGL.Geometry("Sphere"),
     tmpNormal = vec3.create(),
     tmpVec = vec3.create(),
     needsRebuild = true,
     mesh;
+
 function buildMesh()
 {
     const
-        stacks = Math.max(inStacks.get(), 2),
-        slices = Math.max(inSlices.get(), 3),
+        stacks = Math.ceil(Math.max(inStacks.get(), 2)),
+        slices = Math.ceil(Math.max(inSlices.get(), 3)),
         stackLimit = Math.min(Math.max(inStacklimit.get() * stacks, 1), stacks),
         radius = inRadius.get();
     let
@@ -10131,55 +10180,55 @@ const op=this;
 const attachments={};
 const inArray_0 = op.inArray("array 0"),
     NumberIn = op.inValueFloat("Number for math", 0.0),
-    mathSelect = op.inSwitch("Math function",['+','-','*','/','%','min','max'],'+'),
+    mathSelect = op.inSwitch("Math function", ["+", "-", "*", "/", "%", "min", "max"], "+"),
     outArray = op.outArray("Array result"),
     outArrayLength = op.outNumber("Array length");
 
-var mathFunc;
+let mathFunc;
 
-var showingError = false;
+let showingError = false;
 
-var mathArray = [];
+let mathArray = [];
 
-inArray_0.onChange = NumberIn.onChange =update;
+inArray_0.onChange = NumberIn.onChange = update;
 mathSelect.onChange = onFilterChange;
 
 onFilterChange();
 
 function onFilterChange()
 {
-    var mathSelectValue = mathSelect.get();
+    let mathSelectValue = mathSelect.get();
 
-    if(mathSelectValue === '+')         mathFunc = function(a,b){return a+b};
-    else if(mathSelectValue === '-')    mathFunc = function(a,b){return a-b};
-    else if(mathSelectValue === '*')    mathFunc = function(a,b){return a*b};
-    else if(mathSelectValue === '/')    mathFunc = function(a,b){return a/b};
-    else if(mathSelectValue === '%')    mathFunc = function(a,b){return a%b};
-    else if(mathSelectValue === 'min')  mathFunc = function(a,b){return Math.min(a,b)};
-    else if(mathSelectValue === 'max')  mathFunc = function(a,b){return Math.max(a,b)};
+    if (mathSelectValue === "+") mathFunc = function (a, b) { return a + b; };
+    else if (mathSelectValue === "-") mathFunc = function (a, b) { return a - b; };
+    else if (mathSelectValue === "*") mathFunc = function (a, b) { return a * b; };
+    else if (mathSelectValue === "/") mathFunc = function (a, b) { return a / b; };
+    else if (mathSelectValue === "%") mathFunc = function (a, b) { return a % b; };
+    else if (mathSelectValue === "min") mathFunc = function (a, b) { return Math.min(a, b); };
+    else if (mathSelectValue === "max") mathFunc = function (a, b) { return Math.max(a, b); };
     update();
-    op.setUiAttrib({"extendTitle":mathSelectValue});
+    op.setUiAttrib({ "extendTitle": mathSelectValue });
 }
 
 function update()
 {
-    var array0 = inArray_0.get();
+    let array0 = inArray_0.get();
 
     mathArray.length = 0;
 
-    if(!array0)
+    if (!array0)
     {
         outArrayLength.set(0);
         outArray.set(null);
         return;
     }
 
-    var num = NumberIn.get();
+    let num = NumberIn.get();
     mathArray.length = array0.length;
 
-    var i = 0;
+    let i = 0;
 
-    for(i = 0; i < array0.length; i++)
+    for (i = 0; i < array0.length; i++)
     {
         mathArray[i] = mathFunc(array0[i], num);
     }
@@ -10188,7 +10237,6 @@ function update()
     outArray.set(mathArray);
     outArrayLength.set(mathArray.length);
 }
-
 
 
 };
@@ -10216,7 +10264,7 @@ const
     mul = op.inValue("frequency", 1.0),
     amplitude = op.inValue("amplitude", 1.0),
     invert = op.inValueBool("asine", false),
-    result = op.outValue("result");
+    result = op.outNumber("result");
 
 let calculate = Math.sin;
 
@@ -10438,16 +10486,15 @@ const op=this;
 const attachments={};
 // http://stackoverflow.com/questions/5504635/computing-fovx-opengl
 
-const render = op.inTrigger("render");
-const fovY = op.inValueFloat("fov y", 45);
-const zNear = op.inValueFloat("frustum near", 0.1);
-const zFar = op.inValueFloat("frustum far", 20);
-const autoAspect = op.inValueBool("Auto Aspect Ratio", true);
-const aspect = op.inValue("Aspect Ratio");
-
-const trigger = op.outTrigger("trigger");
-
-const cgl = op.patch.cgl;
+const
+    render = op.inTrigger("render"),
+    fovY = op.inValueFloat("fov y", 45),
+    zNear = op.inValueFloat("frustum near", 0.1),
+    zFar = op.inValueFloat("frustum far", 20),
+    autoAspect = op.inValueBool("Auto Aspect Ratio", true),
+    aspect = op.inValue("Aspect Ratio"),
+    trigger = op.outTrigger("trigger"),
+    outAsp = op.outNumber("Aspect");
 
 fovY.onChange = zFar.onChange = zNear.onChange = changed;
 
@@ -10457,29 +10504,30 @@ op.setPortGroup("Field of View", fovY);
 op.setPortGroup("Frustrum", zNear, zFar);
 
 let asp = 0;
-
 render.onTriggered = function ()
 {
-    asp = cgl.getViewPort()[2] / cgl.getViewPort()[3];
-    if (!autoAspect.get())asp = aspect.get();
+    const cg = op.patch.cg;
 
-    cgl.pushPMatrix();
+    asp = cg.getViewPort()[2] / cg.getViewPort()[3];
+    if (!autoAspect.get())asp = aspect.get();
+    outAsp.set(asp);
+
+    cg.pushPMatrix();
     mat4.perspective(
-        cgl.pMatrix,
+        cg.pMatrix,
         fovY.get() * 0.0174533,
         asp,
         zNear.get(),
         zFar.get());
 
-    // mat4.translate(cgl.pMatrix,cgl.pMatrix,[-0.5,0,0]);
     trigger.trigger();
 
-    cgl.popPMatrix();
+    cg.popPMatrix();
 };
 
 function changed()
 {
-    cgl.frameStore.perspective =
+    op.patch.cgl.frameStore.perspective =
     {
         "fovy": fovY.get(),
         "zFar": zFar.get(),
@@ -10624,19 +10672,19 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    STR_FRONT="Front Sides",
-    STR_BACK="Back Sides",
-    STR_BOTH="All",
-    render=op.inTrigger("render"),
-    trigger=op.outTrigger("trigger"),
-    facing=op.inSwitch("Discard",[STR_BACK,STR_FRONT,STR_BOTH],STR_BACK),
-    enable=op.inValueBool("Active",true),
-    cgl=op.patch.cgl;
+    STR_FRONT = "Front Sides",
+    STR_BACK = "Back Sides",
+    STR_BOTH = "All",
+    render = op.inTrigger("render"),
+    trigger = op.outTrigger("trigger"),
+    facing = op.inSwitch("Discard", [STR_BACK, STR_FRONT, STR_BOTH], STR_BACK),
+    enable = op.inValueBool("Active", true),
+    cgl = op.patch.cgl;
 
-op.setPortGroup("Face Fulling",[enable,facing]);
-var whichFace=cgl.gl.BACK;
+op.setPortGroup("Face Fulling", [enable, facing]);
+let whichFace = cgl.gl.BACK;
 
-render.onTriggered=function()
+render.onTriggered = function ()
 {
     cgl.pushCullFace(enable.get());
     cgl.pushCullFaceFacing(whichFace);
@@ -10647,12 +10695,13 @@ render.onTriggered=function()
     cgl.popCullFaceFacing();
 };
 
-facing.onChange=function()
+facing.onChange = function ()
 {
-    whichFace=cgl.gl.BACK;
-    if(facing.get()==STR_FRONT) whichFace=cgl.gl.FRONT;
-    else if(facing.get()==STR_BOTH) whichFace=cgl.gl.FRONT_AND_BACK;
+    whichFace = cgl.gl.BACK;
+    if (facing.get() == STR_FRONT) whichFace = cgl.gl.FRONT;
+    else if (facing.get() == STR_BOTH) whichFace = cgl.gl.FRONT_AND_BACK;
 };
+
 
 };
 
@@ -10750,6 +10799,10 @@ exe.onTriggered = () =>
             if (startTimeLine.get())
             {
                 op.patch.timer.play();
+            }
+            else
+            {
+                op.patch.timer.pause();
             }
         }
         firstTime = false;
@@ -10880,14 +10933,15 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    bool=op.inValueBool("bool"),
-    number=op.outValue("number");
+    bool = op.inValueBool("bool"),
+    number = op.outNumber("number");
 
-bool.onChange=function()
+bool.onChange = function ()
 {
-    if(bool.get()) number.set(1);
+    if (bool.get()) number.set(1);
     else number.set(0);
 };
+
 
 };
 
@@ -10933,9 +10987,9 @@ const
     restricted = op.inValueBool("restricted", true),
 
     trigger = op.outTrigger("trigger"),
-    outRadius = op.outValue("radius"),
-    outXDeg = op.outValue("Rot X"),
-    outYDeg = op.outValue("Rot Y"),
+    outRadius = op.outNumber("radius"),
+    outXDeg = op.outNumber("Rot X"),
+    outYDeg = op.outNumber("Rot Y"),
 
     inReset = op.inTriggerButton("Reset");
 
@@ -10949,7 +11003,6 @@ maxDist.set(99999);
 
 inReset.onTriggered = reset;
 
-const cgl = op.patch.cgl;
 let eye = vec3.create();
 const vUp = vec3.create();
 const vCenter = vec3.create();
@@ -11037,6 +11090,14 @@ const lastPx = 0;
 
 render.onTriggered = function ()
 {
+    const cgl = op.patch.cg;
+
+    if (!element)
+    {
+        setElement(cgl.canvas);
+        bind();
+    }
+
     cgl.pushViewMatrix();
 
     px = ip(px, percX);
@@ -11190,7 +11251,7 @@ function onMouseUp(e)
 
 function lockChange()
 {
-    const el = op.patch.cgl.canvas;
+    const el = op.patch.cg.canvas;
 
     if (document.pointerLockElement === el || document.mozPointerLockElement === el || document.webkitPointerLockElement === el)
     {
@@ -11283,9 +11344,6 @@ function unbind()
 }
 
 eye = circlePos(0);
-setElement(cgl.canvas);
-
-bind();
 
 initialX.set(0.25);
 initialRadius.set(0.05);
@@ -11314,7 +11372,7 @@ const
     render = op.inTrigger("render"),
     enablePointerLock = op.inBool("Enable pointer lock", true),
     trigger = op.outTrigger("trigger"),
-    isLocked = op.outValue("isLocked", false),
+    isLocked = op.outBoolNum("isLocked", false),
 
     moveSpeed = op.inFloat("Speed", 1),
     mouseSpeed = op.inFloat("Mouse Speed", 1),
@@ -11328,16 +11386,16 @@ const
 
     inReset = op.inTriggerButton("Reset"),
 
-    outPosX = op.outValue("posX"),
-    outPosY = op.outValue("posY"),
-    outPosZ = op.outValue("posZ"),
+    outPosX = op.outNumber("posX"),
+    outPosY = op.outNumber("posY"),
+    outPosZ = op.outNumber("posZ"),
 
     outMouseDown = op.outTrigger("Mouse Left"),
     outMouseDownRight = op.outTrigger("Mouse Right"),
 
-    outDirX = op.outValue("Dir X"),
-    outDirY = op.outValue("Dir Y"),
-    outDirZ = op.outValue("Dir Z");
+    outDirX = op.outNumber("Dir X"),
+    outDirY = op.outNumber("Dir Y"),
+    outDirZ = op.outNumber("Dir Z");
 
 const vPos = vec3.create();
 let speedx = 0, speedy = 0, speedz = 0;
@@ -11847,7 +11905,7 @@ const
     textureOut = op.outTexture("texture"),
     outLines = op.outNumber("Total Lines", 0),
     outWidth = op.outNumber("Width", 0),
-    loaded = op.outValue("Font Available", 0);
+    loaded = op.outBoolNum("Font Available", 0);
 
 const cgl = op.patch.cgl;
 
@@ -11966,7 +12024,7 @@ op.onDelete = function ()
         CABLES.OpTextureMeshCanvas[canvasid].canvas.remove();
 };
 
-var shader = new CGL.Shader(cgl, "TextMesh");
+const shader = new CGL.Shader(cgl, "TextMesh");
 shader.setSource(attachments.textmesh_vert, attachments.textmesh_frag);
 const uniTex = new CGL.Uniform(shader, "t", "tex", 0);
 const uniTexMul = new CGL.Uniform(shader, "t", "texMul", 1);
@@ -12013,7 +12071,7 @@ render.onTriggered = function ()
     if (mesh && mesh.numInstances > 0)
     {
         cgl.pushBlendMode(CGL.BLEND_NORMAL, true);
-        cgl.setShader(shader);
+        cgl.pushShader(shader);
         cgl.setTexture(0, textureOut.get().tex);
 
         const mulTex = inMulTex.get();
@@ -12034,7 +12092,7 @@ render.onTriggered = function ()
         cgl.popModelMatrix();
 
         cgl.setTexture(0, null);
-        cgl.setPreviousShader();
+        cgl.popShader();
         cgl.popBlendMode();
     }
 
@@ -12100,7 +12158,7 @@ function generateMesh()
         let offX = 0;
         let width = 0;
 
-        for (var i = 0; i < numChars; i++)
+        for (let i = 0; i < numChars; i++)
         {
             const chStr = txt.substring(i, i + 1);
             const char = font.chars[String(chStr)];
@@ -12121,7 +12179,7 @@ function generateMesh()
 
         height = (s + 1) * lineHeight.get();
 
-        for (var i = 0; i < numChars; i++)
+        for (let i = 0; i < numChars; i++)
         {
             const chStr = txt.substring(i, i + 1);
             const char = font.chars[String(chStr)];
@@ -12184,7 +12242,7 @@ function printChars(fontSize, simulate)
     ctx.font = fontSize + "px " + inFont.get();
     ctx.textAlign = "left";
 
-    var posy = 0, i = 0;
+    let posy = 0;
     let posx = 0;
     const lineHeight = fontSize * 1.4;
     const result =
@@ -12192,7 +12250,7 @@ function printChars(fontSize, simulate)
             "fits": true
         };
 
-    for (var i = 0; i < font.characters.length; i++)
+    for (let i = 0; i < font.characters.length; i++)
     {
         const chStr = String(font.characters.substring(i, i + 1));
         const chWidth = (ctx.measureText(chStr).width);
@@ -12817,29 +12875,30 @@ Ops.Array.ArrayMultiply = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var inArray=op.inArray("In");
-var inValue=op.inValue("Value",1.0);
-var outArray=op.outArray("Result");
+let inArray = op.inArray("In");
+let inValue = op.inValue("Value", 1.0);
+let outArray = op.outArray("Result");
 
-var newArr=[];
+let newArr = [];
 outArray.set(newArr);
-inArray.onChange=
-inValue.onChange=inArray.onChange=function()
+inArray.onChange =
+inValue.onChange = inArray.onChange = function ()
 {
-    var arr=inArray.get();
-    if(!arr)return;
+    let arr = inArray.get();
+    if (!arr) return;
 
-    var mul=inValue.get();
+    let mul = inValue.get();
 
-    if(newArr.length!=arr.length)newArr.length=arr.length;
+    if (newArr.length != arr.length)newArr.length = arr.length;
 
-    for(var i=0;i<arr.length;i++)
+    for (let i = 0; i < arr.length; i++)
     {
-        newArr[i]=arr[i]*mul;
+        newArr[i] = arr[i] * mul;
     }
     outArray.set(null);
     outArray.set(newArr);
 };
+
 
 };
 
@@ -12864,9 +12923,9 @@ const
     mouseClickLeft = op.outTrigger("Click Left"),
     mouseClickRight = op.outTrigger("Click Right"),
     mouseDoubleClick = op.outTrigger("Double Click"),
-    mouseDownLeft = op.outValue("Button pressed Left", false),
-    mouseDownMiddle = op.outValue("Button pressed Middle", false),
-    mouseDownRight = op.outValue("Button pressed Right", false),
+    mouseDownLeft = op.outBoolNum("Button pressed Left", false),
+    mouseDownMiddle = op.outBoolNum("Button pressed Middle", false),
+    mouseDownRight = op.outBoolNum("Button pressed Right", false),
     triggerMouseDownLeft = op.outTrigger("Mouse Down Left"),
     triggerMouseDownMiddle = op.outTrigger("Mouse Down Middle"),
     triggerMouseDownRight = op.outTrigger("Mouse Down Right"),
@@ -13033,7 +13092,7 @@ inVisible.onChange = function ()
 };
 
 // vars
-var el = document.createElement("div");
+let el = document.createElement("div");
 el.dataset.op = op.id;
 el.classList.add("sidebar__group");
 onDefaultMinimizedPortChanged();
@@ -13173,45 +13232,46 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    inNum=op.inValueInt("Num Triplets",100),
-    inX=op.inValueFloat("X",0),
-    inY=op.inValueFloat("Y",0),
-    inZ=op.inValueFloat("Z",0),
-    outArr=op.outArray("Array"),
+    inNum = op.inValueInt("Num Triplets", 100),
+    inX = op.inValueFloat("X", 0),
+    inY = op.inValueFloat("Y", 0),
+    inZ = op.inValueFloat("Z", 0),
+    outArr = op.outArray("Array"),
     outTotalPoints = op.outNumber("Total points"),
     outArrayLength = op.outNumber("Array length");
 
-inNum.onChange=
-    inX.onChange=
-    inY.onChange=
-    inZ.onChange=update;
+inNum.onChange =
+    inX.onChange =
+    inY.onChange =
+    inZ.onChange = update;
 
-var arr=[];
+let arr = [];
 update();
 
 function update()
 {
-    var num=inNum.get()*3;
+    let num = inNum.get() * 3;
 
-    if(num<0)num=0;
-    if(arr.length!=num) arr.length=num;
+    if (num < 0)num = 0;
+    if (arr.length != num) arr.length = num;
 
-    const x=inX.get();
-    const y=inY.get();
-    const z=inZ.get();
+    const x = inX.get();
+    const y = inY.get();
+    const z = inZ.get();
 
-    for(var i=0;i<num;i+=3)
+    for (let i = 0; i < num; i += 3)
     {
-        arr[i]=x;
-        arr[i+1]=y;
-        arr[i+2]=z;
+        arr[i] = x;
+        arr[i + 1] = y;
+        arr[i + 2] = z;
     }
 
     outArr.set(null);
     outArr.set(arr);
-    outTotalPoints.set(num/3);
+    outTotalPoints.set(num / 3);
     outArrayLength.set(num);
 }
+
 
 };
 
@@ -13292,14 +13352,10 @@ Ops.Value.GateNumber = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-// input
 const valueInPort = op.inValue("Value In", 0);
 const passThroughPort = op.inValueBool("Pass Through");
+const valueOutPort = op.outNumber("Value Out");
 
-// output
-const valueOutPort = op.outValue("Value Out");
-
-// change listeners
 valueInPort.onChange = update;
 passThroughPort.onChange = update;
 
@@ -13335,32 +13391,30 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    val=op.inFloat("Value"),
-    delTrue=op.inFloat("Delay True",1),
-    delFalse=op.inFloat("Delay False",1),
-    outVal=op.outValue("Out Value");
+    val = op.inFloat("Value"),
+    delTrue = op.inFloat("Delay True", 1),
+    delFalse = op.inFloat("Delay False", 1),
+    outVal = op.outBoolNum("Out Value");
 
-let timeout=-1;
+let timeout = -1;
 
-val.onChange=
-    delFalse.onChange=
-    delTrue.onChange=update;
+val.onChange =
+    delFalse.onChange =
+    delTrue.onChange = update;
 
 function update()
 {
     clearTimeout(timeout);
-    let v=val.get();
+    let v = val.get();
 
-    let delay=1;
-    if(v) delay=delTrue.get()*1000;
-    else delay=delFalse.get()*1000;
+    let delay = 1;
+    if (v) delay = delTrue.get() * 1000;
+    else delay = delFalse.get() * 1000;
 
-
-    timeout=setTimeout(function()
+    timeout = setTimeout(function ()
     {
         outVal.set(v);
-    },delay);
-
+    }, delay);
 }
 
 
@@ -13668,29 +13722,30 @@ const op=this;
 const attachments={};
 const
     inArray = op.inArray("Array In"),
-    inValue = op.inValue("Value",2.0),
+    inValue = op.inValue("Value", 2.0),
     outArray = op.outArray("Array Out");
 
-var newArr = [];
+let newArr = [];
 outArray.set(newArr);
 inArray.onChange =
-inValue.onChange = inArray.onChange = function()
+inValue.onChange = inArray.onChange = function ()
 {
-    var arr = inArray.get();
-    if(!arr)return;
+    let arr = inArray.get();
+    if (!arr) return;
 
-    var modulo = inValue.get();
+    let modulo = inValue.get();
 
-    if(newArr.length != arr.length) newArr.length = arr.length;
+    if (newArr.length != arr.length) newArr.length = arr.length;
 
-    var i = 0;
-    for(i = 0;i < arr.length;i++)
+    let i = 0;
+    for (i = 0; i < arr.length; i++)
     {
         newArr[i] = arr[i] % modulo;
     }
     outArray.set(null);
     outArray.set(newArr);
 };
+
 
 };
 
@@ -13714,7 +13769,7 @@ const attachments={};
 const
     number1 = op.inValueFloat("number1", 1),
     number2 = op.inValueFloat("number2", 2),
-    result = op.outValue("result");
+    result = op.outNumber("result");
 
 op.setTitle("/");
 
@@ -13756,7 +13811,6 @@ const exe = op.inTrigger("Trigger in"),
     outArrayLength = op.outNumber("Array length");
 
 let showingError = false;
-
 let arr = [];
 let emptyArray = [];
 let needsCalc = true;
@@ -13857,20 +13911,19 @@ Ops.Math.Compare.Equals = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const number1 = op.inValue("number1",1);
-const number2 = op.inValue("number2",1);
-const result = op.outValue("result");
+const
+    number1 = op.inValue("number1", 1),
+    number2 = op.inValue("number2", 1),
+    result = op.outBoolNum("result");
 
-
-number1.onChange=exec;
-number2.onChange=exec;
+number1.onChange =
+    number2.onChange = exec;
 exec();
 
 function exec()
 {
-    result.set( number1.get() == number2.get() );
+    result.set(number1.get() == number2.get());
 }
-
 
 
 };
@@ -13892,49 +13945,48 @@ Ops.Math.Math = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const num0 = op.inFloat("number 0",0),
-    num1 = op.inFloat("number 1",0),
-    mathDropDown = op.inSwitch("math mode",['+','-','*','/','%','min','max'], "+"),
+const num0 = op.inFloat("number 0", 0),
+    num1 = op.inFloat("number 1", 0),
+    mathDropDown = op.inSwitch("math mode", ["+", "-", "*", "/", "%", "min", "max"], "+"),
     result = op.outNumber("result");
 
-var mathFunc;
+let mathFunc;
 
 num0.onChange = num1.onChange = update;
 mathDropDown.onChange = onFilterChange;
 
-var n0=0;
-var n1=0;
+let n0 = 0;
+let n1 = 0;
 
-const mathFuncAdd = function(a,b){return a+b};
-const mathFuncSub = function(a,b){return a-b};
-const mathFuncMul = function(a,b){return a*b};
-const mathFuncDiv = function(a,b){return a/b};
-const mathFuncMod = function(a,b){return a%b};
-const mathFuncMin = function(a,b){return Math.min(a,b)};
-const mathFuncMax = function(a,b){return Math.max(a,b)};
-
+const mathFuncAdd = function (a, b) { return a + b; };
+const mathFuncSub = function (a, b) { return a - b; };
+const mathFuncMul = function (a, b) { return a * b; };
+const mathFuncDiv = function (a, b) { return a / b; };
+const mathFuncMod = function (a, b) { return a % b; };
+const mathFuncMin = function (a, b) { return Math.min(a, b); };
+const mathFuncMax = function (a, b) { return Math.max(a, b); };
 
 function onFilterChange()
 {
-    var mathSelectValue = mathDropDown.get();
+    let mathSelectValue = mathDropDown.get();
 
-    if(mathSelectValue == '+')         mathFunc = mathFuncAdd;
-    else if(mathSelectValue == '-')    mathFunc = mathFuncSub;
-    else if(mathSelectValue == '*')    mathFunc = mathFuncMul;
-    else if(mathSelectValue == '/')    mathFunc = mathFuncDiv;
-    else if(mathSelectValue == '%')    mathFunc = mathFuncMod;
-    else if(mathSelectValue == 'min')  mathFunc = mathFuncMin;
-    else if(mathSelectValue == 'max')  mathFunc = mathFuncMax;
+    if (mathSelectValue == "+") mathFunc = mathFuncAdd;
+    else if (mathSelectValue == "-") mathFunc = mathFuncSub;
+    else if (mathSelectValue == "*") mathFunc = mathFuncMul;
+    else if (mathSelectValue == "/") mathFunc = mathFuncDiv;
+    else if (mathSelectValue == "%") mathFunc = mathFuncMod;
+    else if (mathSelectValue == "min") mathFunc = mathFuncMin;
+    else if (mathSelectValue == "max") mathFunc = mathFuncMax;
     update();
-    op.setUiAttrib({"extendTitle":mathSelectValue});
+    op.setUiAttrib({ "extendTitle": mathSelectValue });
 }
 
 function update()
 {
-   n0 = num0.get();
-   n1 = num1.get();
+    n0 = num0.get();
+    n1 = num1.get();
 
-   result.set(mathFunc(n0,n1));
+    result.set(mathFunc(n0, n1));
 }
 
 onFilterChange();
@@ -13960,15 +14012,16 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    bool=op.inValueBool("in bool"),
-    outbool=op.outValueBool("out bool");
+    bool = op.inValueBool("in bool"),
+    outbool = op.outBoolNum("out bool");
 
-bool.changeAlways=true;
+bool.changeAlways = true;
 
-bool.onChange=function()
+bool.onChange = function ()
 {
-    outbool.set( ! (true==bool.get()) );
+    outbool.set(!(bool.get() == true));
 };
+
 
 };
 
@@ -14022,7 +14075,7 @@ const
 
 inMask.onChange = function ()
 {
-    if (inMask.get())shader.define("MASK");
+    if (inMask.isLinked())shader.define("MASK");
     else shader.removeDefine("MASK");
 };
 
@@ -14173,17 +14226,16 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    result=op.outValue("result"),
-    number1=op.inValueFloat("number1"),
-    number2=op.inValueFloat("number2");
+    number1 = op.inValueFloat("number1"),
+    number2 = op.inValueFloat("number2"),
+    result = op.outBoolNum("result");
 
-number1.onChange=number2.onChange=exec;
+number1.onChange = number2.onChange = exec;
 
 function exec()
 {
-    result.set(number1.get()>number2.get());
+    result.set(number1.get() > number2.get());
 }
-
 
 
 };
@@ -14205,62 +14257,71 @@ Ops.Color.HSBtoRGB = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var outR=op.outValue("R");
-var outG=op.outValue("G");
-var outB=op.outValue("B");
+const
+    inH = op.inValueSlider("Hue"),
+    inS = op.inValueSlider("Saturation", 1),
+    inV = op.inValueSlider("Brightness", 0.5),
+    outR = op.outNumber("R"),
+    outG = op.outNumber("G"),
+    outB = op.outNumber("B");
 
-var inH=op.inValueSlider("Hue");
-var inS=op.inValueSlider("Saturation",1);
-var inV=op.inValueSlider("Brightness",0.5);
-
-// var hslToRgb = function(hue, saturation, lightness){
-inH.onChange=inS.onChange=inV.onChange=update;
+inH.onChange = inS.onChange = inV.onChange = update;
 update();
 
 function update()
 {
-
-    var hue=(inH.get());
-    var saturation=(inS.get());
-    var lightness=(inV.get());
+    let hue = (inH.get());
+    let saturation = (inS.get());
+    let lightness = (inV.get());
 
     // based on algorithm from http://en.wikipedia.org/wiki/HSL_and_HSV#Converting_to_RGB
 
-    var chroma = (1 - Math.abs((2 * lightness) - 1)) * saturation;
-    var huePrime = hue *6; // / 60;
-    var secondComponent = chroma * (1 - Math.abs((huePrime % 2) - 1));
+    let chroma = (1 - Math.abs((2 * lightness) - 1)) * saturation;
+    let huePrime = hue * 6; // / 60;
+    let secondComponent = chroma * (1 - Math.abs((huePrime % 2) - 1));
 
-    huePrime = Math.floor(huePrime)||0;
-    var red=0;
-    var green=0;
-    var blue=0;
+    huePrime = Math.floor(huePrime) || 0;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
 
-    if( huePrime === 0 ){
+    if (huePrime === 0)
+    {
         red = chroma;
         green = secondComponent;
         blue = 0;
-    }else if( huePrime === 1 ){
+    }
+    else if (huePrime === 1)
+    {
         red = secondComponent;
         green = chroma;
         blue = 0;
-    }else if( huePrime === 2 ){
+    }
+    else if (huePrime === 2)
+    {
         red = 0;
         green = chroma;
         blue = secondComponent;
-    }else if( huePrime === 3 ){
+    }
+    else if (huePrime === 3)
+    {
         red = 0;
         green = secondComponent;
         blue = chroma;
-    }else if( huePrime === 4 ){
+    }
+    else if (huePrime === 4)
+    {
         red = secondComponent;
         green = 0;
         blue = chroma;
-    }else if( huePrime >= 5){
+    }
+    else if (huePrime >= 5)
+    {
         red = chroma;
         green = 0;
         blue = secondComponent;
     }
-    var lightnessAdjustment = (lightness - (chroma / 2));
+    let lightnessAdjustment = (lightness - (chroma / 2));
     red += lightnessAdjustment;
     green += lightnessAdjustment;
     blue += lightnessAdjustment;
@@ -14269,9 +14330,8 @@ function update()
     outG.set(green);
     outB.set(blue);
 
-//   return [Math.round(red * 255), Math.round(green * 255), Math.round(blue * 255)];
-
-};
+    //   return [Math.round(red * 255), Math.round(green * 255), Math.round(blue * 255)];
+}
 
 
 };
@@ -14320,17 +14380,16 @@ const op=this;
 const attachments={};
 const number1 = op.inValue("number1");
 const number2 = op.inValue("number2");
-const result = op.outValue("result");
+const result = op.outBoolNum("result");
 
-number1.onChange=exec;
-number2.onChange=exec;
+number1.onChange = exec;
+number2.onChange = exec;
 exec();
 
 function exec()
 {
-    result.set( number1.get() < number2.get() );
+    result.set(number1.get() < number2.get());
 }
-
 
 
 };
@@ -14424,16 +14483,15 @@ const
 array.ignoreValueSerialize = true;
 
 index.onChange = update;
-let arr = null;
 
 array.onChange = function ()
 {
-    arr = array.get();
     update();
 };
 
 function update()
 {
+    const arr = array.get();
     if (arr) result.set(arr[index.get()]);
 }
 
@@ -14495,11 +14553,11 @@ const
     inUrlPort = op.inUrl("URL", "audio"),
     inLoadingTask = op.inBool("Create Loading Task", true),
     audioBufferPort = op.outObject("Audio Buffer", null, "audioBuffer"),
-    finishedLoadingPort = op.outValue("Finished Loading", false),
-    sampleRatePort = op.outValue("Sample Rate", 0),
-    lengthPort = op.outValue("Length", 0),
-    durationPort = op.outValue("Duration", 0),
-    numberOfChannelsPort = op.outValue("Number of Channels", 0),
+    finishedLoadingPort = op.outBoolNum("Finished Loading", false),
+    sampleRatePort = op.outNumber("Sample Rate", 0),
+    lengthPort = op.outNumber("Length", 0),
+    durationPort = op.outNumber("Duration", 0),
+    numberOfChannelsPort = op.outNumber("Number of Channels", 0),
     outLoading = op.outBool("isLoading", 0);
 
 let currentBuffer = null;
@@ -15952,21 +16010,21 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    number = op.inValueFloat("Value",2),
-    range1 = op.inValueFloat("Range 1",1),
-    range2 = op.inValueFloat("Range 2",3),
-    result = op.outValue("Result");
+    number = op.inValueFloat("Value", 2),
+    range1 = op.inValueFloat("Range 1", 1),
+    range2 = op.inValueFloat("Range 2", 3),
+    result = op.outNumber("Result");
 
-number.onChange=range1.onChange=range2.onChange=exec;
+number.onChange = range1.onChange = range2.onChange = exec;
 exec();
 
-function exec() {
-  result.set(
-      number.get() >= Math.min( range1.get(), range2.get() ) &&
-      number.get() <= Math.max( range1.get(), range2.get() )
-  );
+function exec()
+{
+    result.set(
+        number.get() >= Math.min(range1.get(), range2.get()) &&
+      number.get() <= Math.max(range1.get(), range2.get())
+    );
 }
-
 
 
 };
@@ -15991,7 +16049,7 @@ const attachments={};
 const
     str = op.inStringEditor("JSON String", "{}", "json"),
     outObj = op.outObject("Result"),
-    isValid = op.outValue("Valid");
+    isValid = op.outBoolNum("Valid");
 
 str.onChange = parse;
 parse();
@@ -16055,13 +16113,14 @@ Ops.Json.ObjectToArray = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var inObj=op.inObject("Object");
-var outArray=op.outArray("Array");
+const inObj = op.inObject("Object");
+const outArray = op.outArray("Array");
 
-inObj.onChange=function()
+inObj.onChange = function ()
 {
     outArray.set(inObj.get());
 };
+
 
 };
 
@@ -16228,21 +16287,19 @@ Ops.Gl.TextureArrayLoaderFromArray = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const filenames = op.inArray("urls");
-
-const tfilter = op.inValueSelect("filter", ["nearest", "linear", "mipmap"]);
-const wrap = op.inValueSelect("wrap", ["repeat", "mirrored repeat", "clamp to edge"], "clamp to edge");
-const flip = op.addInPort(new CABLES.Port(op, "flip", CABLES.OP_PORT_TYPE_VALUE, { "display": "bool" }));
-const unpackAlpha = op.addInPort(new CABLES.Port(op, "unpackPreMultipliedAlpha", CABLES.OP_PORT_TYPE_VALUE, { "display": "bool" }));
-const inCaching = op.inBool("Caching", false);
-const inPatchAsset = op.inBool("Asset in patch", false);
-const arrOut = op.outArray("TextureArray");
-
-// var textureOut=op.outTexture("texture");
-const width = op.addOutPort(new CABLES.Port(op, "width", CABLES.OP_PORT_TYPE_VALUE));
-const height = op.addOutPort(new CABLES.Port(op, "height", CABLES.OP_PORT_TYPE_VALUE));
-const loading = op.addOutPort(new CABLES.Port(op, "loading", CABLES.OP_PORT_TYPE_VALUE));
-const ratio = op.outValue("Aspect Ratio");
+const
+    filenames = op.inArray("urls"),
+    tfilter = op.inValueSelect("filter", ["nearest", "linear", "mipmap"]),
+    wrap = op.inValueSelect("wrap", ["repeat", "mirrored repeat", "clamp to edge"], "clamp to edge"),
+    flip = op.addInPort(new CABLES.Port(op, "flip", CABLES.OP_PORT_TYPE_VALUE, { "display": "bool" })),
+    unpackAlpha = op.addInPort(new CABLES.Port(op, "unpackPreMultipliedAlpha", CABLES.OP_PORT_TYPE_VALUE, { "display": "bool" })),
+    inCaching = op.inBool("Caching", false),
+    inPatchAsset = op.inBool("Asset in patch", false),
+    arrOut = op.outArray("TextureArray"),
+    width = op.outNumber("width"),
+    height = op.outNumber("height"),
+    loading = op.outBoolNum("loading"),
+    ratio = op.outNumber("Aspect Ratio");
 
 flip.set(false);
 unpackAlpha.set(false);
@@ -16297,7 +16354,7 @@ function loadImage(_i, _url, nocache, cb)
     {
         loading.set(true);
 
-        var tex = CGL.Texture.load(cgl, url,
+        let tex = CGL.Texture.load(cgl, url,
             function (err)
             {
                 if (err)
@@ -16461,15 +16518,16 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    number=op.inValue("number"),
-    result=op.outValue("result");
+    number = op.inValue("number"),
+    result = op.outNumber("result");
 
-number.onChange=function()
+number.onChange = function ()
 {
-    let r=Math.sqrt( number.get() );
-    if(isNaN(r))r=0;
+    let r = Math.sqrt(number.get());
+    if (isNaN(r))r = 0;
     result.set(r);
 };
+
 
 };
 
@@ -16490,15 +16548,15 @@ Ops.Math.Ceil = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const number1=op.inValue("Number");
-const result=op.outValue("Result");
+const number1 = op.inValue("Number");
+const result = op.outNumber("Result");
 
 function exec()
 {
     result.set(Math.ceil(number1.get()));
 }
 
-number1.onChange=exec;
+number1.onChange = exec;
 
 
 };
@@ -16677,24 +16735,25 @@ Ops.Math.Compare.Between = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const number=op.inValue("value",2);
-const number1=op.inValue("number1",1);
-const number2=op.inValue("number2",3);
-const result=op.outValue("result");
+const
+    number = op.inValue("value", 2),
+    number1 = op.inValue("number1", 1),
+    number2 = op.inValue("number2", 3),
+    result = op.outNumber("result");
+
+number1.onChange = exec;
+number2.onChange = exec;
+number.onChange = exec;
+exec();
 
 function exec()
 {
-    result.set
-        (
-            number.get() > Math.min(number1.get() , number2.get() )  &&
-            number.get() < Math.max(number1.get() , number2.get() ) 
-        );
+    result.set(
+        number.get() > Math.min(number1.get(), number2.get()) &&
+            number.get() < Math.max(number1.get(), number2.get())
+    );
 }
 
-number1.onChange=exec;
-number2.onChange=exec;
-number.onChange=exec;
-exec();
 
 };
 
@@ -16980,13 +17039,13 @@ fragmentShader.onChange = vertexShader.onChange = function () { needsUpdate = tr
 
 render.onTriggered = doRender;
 
-var needsUpdate = true;
+let needsUpdate = true;
 op.onLoadedValueSet = initDataOnLoad;
 
 function initDataOnLoad(data)
 {
     updateShader();
-    // console.log(data);
+
     // set uniform values AFTER shader has been compiled and uniforms are extracted and uniform ports are created.
     for (let i = 0; i < uniformInputs.length; i++)
         for (let j = 0; j < data.portsIn.length; j++)
@@ -17017,10 +17076,7 @@ function pushTextures()
 {
     for (let i = 0; i < uniformTextures.length; i++)
         if (uniformTextures[i] && uniformTextures[i].get() && uniformTextures[i].get().tex)
-        {
-            // console.log(uniformTextures[i]);
             shader.pushTexture(uniformTextures[i].uniform, uniformTextures[i].get().tex);
-        }
         else
             shader.pushTexture(uniformTextures[i], CGL.Texture.getEmptyTexture(cgl));
 }
@@ -17066,12 +17122,12 @@ function parseUniforms(src)
         {
             let words = lines[i].split(" ");
 
-            for (var j = 0; j < words.length; j++) words[j] = (words[j] + "").trim();
+            for (let j = 0; j < words.length; j++) words[j] = (words[j] + "").trim();
 
             if (words[0] === "UNI" || words[0] === "uniform")
             {
                 let varnames = words[2];
-                if (words.length > 4) for (var j = 3; j < words.length; j++)varnames += words[j];
+                if (words.length > 4) for (let j = 3; j < words.length; j++)varnames += words[j];
 
                 words = words.filter(function (el) { return el !== ""; });
                 const type = words[1];
@@ -17248,34 +17304,34 @@ function updateShader()
     parseUniforms(vertexShader.get());
     parseUniforms(fragmentShader.get());
 
-    for (var j = 0; j < uniformTextures.length; j++)
-        for (var i = 0; i < foundNames.length; i++)
+    for (let j = 0; j < uniformTextures.length; j++)
+        for (let i = 0; i < foundNames.length; i++)
             if (uniformTextures[j] && foundNames.indexOf(uniformTextures[j].name) == -1)
             {
                 uniformTextures[j].remove();
                 uniformTextures[j] = null;
             }
 
-    for (var j = 0; j < uniformInputs.length; j++)
-        for (var i = 0; i < foundNames.length; i++)
+    for (let j = 0; j < uniformInputs.length; j++)
+        for (let i = 0; i < foundNames.length; i++)
             if (uniformInputs[j] && foundNames.indexOf(uniformInputs[j].name) == -1)
             {
                 uniformInputs[j].remove();
                 uniformInputs[j] = null;
             }
 
-    for (var j = 0; j < vectors.length; j++)
+    for (let j = 0; j < vectors.length; j++)
     {
         initVectorUniform(vectors[j]);
         vectors[j].changed = true;
     }
 
-    for (i = 0; i < uniformInputs.length; i++)
+    for (let i = 0; i < uniformInputs.length; i++)
         if (uniformInputs[i] && uniformInputs[i].uniform)uniformInputs[i].uniform.needsUpdate = true;
 
     shader.compile();
 
-    if (CABLES.UI) gui.opParams.show(op);
+    op.refreshParams();
 
     outShader.set(null);
     outShader.set(shader);
@@ -17308,7 +17364,6 @@ function setVectorValues()
             else if (v.num > 4)
             {
                 v.uni.setValue(v.port.get());
-                // console.log(v.port.get());
             }
 
             v.changed = false;
@@ -17707,16 +17762,17 @@ Ops.Boolean.TriggerOnChangeBoolean = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var inBool=op.inValueBool("Value");
-var outTrue=op.outTrigger("True");
-var outFalse=op.outTrigger("False");
+const
+    inBool = op.inValueBool("Value"),
+    outTrue = op.outTrigger("True"),
+    outFalse = op.outTrigger("False");
 
-inBool.onChange=function()
+inBool.onChange = function ()
 {
-    if(inBool.get()) outTrue.trigger();
-        else outFalse.trigger();
-    
+    if (inBool.get()) outTrue.trigger();
+    else outFalse.trigger();
 };
+
 
 };
 
@@ -17740,7 +17796,7 @@ const attachments={};
 const
     bool0 = op.inValueBool("bool 1"),
     bool1 = op.inValueBool("bool 2"),
-    result = op.outValueBool("result");
+    result = op.outBoolNum("result");
 
 bool0.onChange =
 bool1.onChange = exec;
@@ -18153,16 +18209,16 @@ Ops.Trigger.IfEqualsThen = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const exe=op.inTrigger("exe");
-var value1=op.inValue("Value 1",0);
-var value2=op.inValue("Value 2",0);
+const exe = op.inTrigger("exe");
+let value1 = op.inValue("Value 1", 0);
+let value2 = op.inValue("Value 2", 0);
 
-var triggerThen=op.addOutPort(new CABLES.Port(op,"then",CABLES.OP_PORT_TYPE_FUNCTION));
-var triggerElse=op.addOutPort(new CABLES.Port(op,"else",CABLES.OP_PORT_TYPE_FUNCTION));
+let triggerThen = op.addOutPort(new CABLES.Port(op, "then", CABLES.OP_PORT_TYPE_FUNCTION));
+let triggerElse = op.addOutPort(new CABLES.Port(op, "else", CABLES.OP_PORT_TYPE_FUNCTION));
 
 function exec()
 {
-    if(value1.get()==value2.get() )
+    if (value1.get() == value2.get())
     {
         triggerThen.trigger();
     }
@@ -18172,7 +18228,7 @@ function exec()
     }
 }
 
-exe.onTriggered=exec;
+exe.onTriggered = exec;
 
 
 };
@@ -18515,9 +18571,11 @@ const cgl = op.patch.cgl;
 
 inCoords.onChange = updateTexCoordsPorts;
 pTexCoordRand.onChange = updateTexCoordsPorts;
-
-vertCols.onChange = seed.onChange = arr.onChange = reset;
+vertCols.onChange = updateVertCols;
+seed.onChange = arr.onChange = reset;
 numPoints.onChange = updateNumVerts;
+
+vertCols.onLinkChanged = reset;
 
 op.toWorkPortsNeedToBeLinked(arr, exe);
 
@@ -18573,6 +18631,14 @@ function updateTexCoordsPorts()
 
     mesh = null;
     needsRebuild = true;
+}
+
+function updateVertCols()
+{
+    if (!vertCols.get()) return;
+    if (!geom.vertexColors) reset();
+
+    if (mesh)mesh.setAttribute(CGL.SHADERVAR_VERTEX_COLOR, vertCols.get(), 4);
 }
 
 function updateNumVerts()
@@ -18879,16 +18945,16 @@ const
     totalPointsOut = op.outNumber("Total points"),
     arrayLengthOut = op.outNumber("Array length");
 
-var newArr = [];
+let newArr = [];
 outArray.set(newArr);
 
-var newArr = [];
-
 seed.onChange =
-num.onChange =
-size.onChange =
-distrib.onChange =
-distRand.onChange = outArray.onLinkChanged = generate;
+    num.onChange =
+    size.onChange =
+    distrib.onChange =
+    distRand.onChange =
+    outArray.onLinkChanged = generate;
+
 generate();
 
 function generate()
@@ -19073,7 +19139,7 @@ const
     data = op.inObject("data"),
     key = op.inString("key"),
     result = op.outArray("result"),
-    arrLength = op.outValue("Length");
+    arrLength = op.outNumber("Length");
 
 result.ignoreValueSerialize = true;
 data.ignoreValueSerialize = true;
@@ -19082,7 +19148,7 @@ data.onChange = update;
 
 key.onChange = function ()
 {
-    op.setUiAttrib({ "extendTitle": key.get() });
+    if (!key.isLinked())op.setUiAttrib({ "extendTitle": key.get() });
     update();
 };
 
@@ -19153,7 +19219,7 @@ inNodeName.onChange = function ()
     outGeom.set(null);
     node = null;
     outFound.set(false);
-    op.setUiAttrib({ "extendTitle": inNodeName.get() });
+    if (!inNodeName.isLinked())op.setUiAttrib({ "extendTitle": inNodeName.get() });
 };
 
 inSceneTime.onChange = updateTimeInputs;
@@ -19316,7 +19382,7 @@ data.ignoreValueSerialize = true;
 
 key.onChange = function ()
 {
-    op.setUiAttrib({ "extendTitle": key.get() });
+    if (!key.isLinked())op.setUiAttrib({ "extendTitle": key.get() });
     exec();
 };
 data.onChange = exec;
@@ -19352,7 +19418,7 @@ Ops.Gl.GLTF.GltfScene_v3 = function()
 {
 CABLES.Op.apply(this,arguments);
 const op=this;
-const attachments={"inc_camera_js":"const gltfCamera = class\n{\n    constructor(gltf, node)\n    {\n        this.node=node;\n        this.name=node.name;\n        // console.log(gltf);\n        this.config=gltf.json.cameras[node.camera];\n\n        this.pos = vec3.create();\n        this.quat = quat.create();\n        this.quatOr = quat.create();\n        this.vCenter = vec3.create();\n        this.vUp = vec3.create();\n        this.vMat = mat4.create();\n\n    }\n\n    updateAnim(time)\n    {\n        if (this.node && this.node._animTrans)\n        {\n\n            vec3.set(this.pos,\n                this.node._animTrans[0].getValue(time),\n                this.node._animTrans[1].getValue(time),\n                this.node._animTrans[2].getValue(time));\n\n            quat.set(this.quat,\n                this.node._animRot[0].getValue(time),\n                this.node._animRot[1].getValue(time),\n                this.node._animRot[2].getValue(time),\n                this.node._animRot[3].getValue(time));\n        }\n    }\n\n    start(time)\n    {\n        if (cgl.frameStore.shadowPass) return;\n\n        this.updateAnim(time);\n        const asp = cgl.getViewPort()[2] / cgl.getViewPort()[3];\n\n        cgl.pushPMatrix();\n        // mat4.perspective(\n        //     cgl.pMatrix,\n        //     this.config.perspective.yfov*0.5,\n        //     asp,\n        //     this.config.perspective.znear,\n        //     this.config.perspective.zfar);\n\n        cgl.pushViewMatrix();\n        // mat4.identity(cgl.vMatrix);\n\n        // if(this.node && this.node.parent)\n        // {\n        //     console.log(this.node.parent)\n            // vec3.add(this.pos,this.pos,this.node.parent._node.translation);\n            // vec3.sub(this.vCenter,this.vCenter,this.node.parent._node.translation);\n            // mat4.translate(cgl.vMatrix,cgl.vMatrix,\n            // [\n            //     -this.node.parent._node.translation[0],\n            //     -this.node.parent._node.translation[1],\n            //     -this.node.parent._node.translation[2]\n            // ])\n        // }\n\n\n\n        // vec3.set(this.vUp, 0, 1, 0);\n        // vec3.set(this.vCenter, 0, -1, 0);\n        // // vec3.set(this.vCenter, 0, 1, 0);\n        // vec3.transformQuat(this.vCenter, this.vCenter, this.quat);\n        // vec3.normalize(this.vCenter, this.vCenter);\n        // vec3.add(this.vCenter, this.vCenter, this.pos);\n\n\n        // mat4.lookAt(cgl.vMatrix, this.pos, this.vCenter, this.vUp);\n\n\n        let mv=mat4.create();\n        mat4.invert(mv,this.node.modelMatAbs());\n\n        // console.log(this.node.modelMatAbs());\n\n        this.vMat=mv;\n\n        mat4.identity(cgl.vMatrix);\n        // console.log(mv);\n        mat4.mul(cgl.vMatrix,cgl.vMatrix,mv);\n\n\n    }\n\n    end()\n    {\n        if (cgl.frameStore.shadowPass) return;\n        cgl.popPMatrix();\n        cgl.popViewMatrix();\n    }\n};\n\n","inc_gltf_js":"const CHUNK_HEADER_SIZE = 8;\n\nconst Gltf = class\n{\n    constructor()\n    {\n        this.json = {};\n        this.accBuffers = [];\n        this.meshes = [];\n        this.nodes = [];\n        this.shaders = [];\n        this.timing = [];\n        this.cams = [];\n        this.startTime = performance.now();\n        this.bounds = new CGL.BoundingBox();\n        this.loaded = Date.now();\n        this.accBuffersDelete = [];\n    }\n\n    getNode(n)\n    {\n        for (let i = 0; i < this.nodes.length; i++)\n        {\n            if (this.nodes[i].name == n) return this.nodes[i];\n        }\n    }\n\n    unHideAll()\n    {\n        for (let i = 0; i < this.nodes.length; i++)\n        {\n            this.nodes[i].unHide();\n        }\n    }\n};\n\nfunction Utf8ArrayToStr(array)\n{\n    if (window.TextDecoder) return new TextDecoder(\"utf-8\").decode(array);\n\n    let out, i, len, c;\n    let char2, char3;\n\n    out = \"\";\n    len = array.length;\n    i = 0;\n    while (i < len)\n    {\n        c = array[i++];\n        switch (c >> 4)\n        {\n        case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:\n            // 0xxxxxxx\n            out += String.fromCharCode(c);\n            break;\n        case 12: case 13:\n            // 110x xxxx   10xx xxxx\n            char2 = array[i++];\n            out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));\n            break;\n        case 14:\n            // 1110 xxxx  10xx xxxx  10xx xxxx\n            char2 = array[i++];\n            char3 = array[i++];\n            out += String.fromCharCode(((c & 0x0F) << 12) |\n                    ((char2 & 0x3F) << 6) |\n                    ((char3 & 0x3F) << 0));\n            break;\n        }\n    }\n\n    return out;\n}\n\nfunction readChunk(dv, bArr, arrayBuffer, offset)\n{\n    const chunk = {};\n\n    if (offset >= dv.byteLength)\n    {\n        op.log(\"could not read chunk...\");\n        return;\n    }\n    chunk.size = dv.getUint32(offset + 0, le);\n\n    // chunk.type = new TextDecoder(\"utf-8\").decode(bArr.subarray(offset+4, offset+4+4));\n    chunk.type = Utf8ArrayToStr(bArr.subarray(offset + 4, offset + 4 + 4));\n\n    if (chunk.type == \"BIN\\0\")\n    {\n        // console.log(chunk.size,arrayBuffer.length,offset);\n        // try\n        // {\n        chunk.dataView = new DataView(arrayBuffer, offset + 8, chunk.size);\n        // }\n        // catch(e)\n        // {\n        //     chunk.dataView = null;\n        //     console.log(e);\n        // }\n    }\n    else\n    if (chunk.type == \"JSON\")\n    {\n        const json = Utf8ArrayToStr(bArr.subarray(offset + 8, offset + 8 + chunk.size));\n\n        try\n        {\n            const obj = JSON.parse(json);\n            chunk.data = obj;\n            outGenerator.set(obj.asset.generator);\n        }\n        catch (e)\n        {\n        }\n    }\n    else\n    {\n        op.warn(\"unknown type\", chunk.type);\n    }\n\n    return chunk;\n}\n\nfunction loadAnims(gltf)\n{\n    const uniqueAnimNames = {};\n\n    for (let i = 0; i < gltf.json.animations.length; i++)\n    {\n        const an = gltf.json.animations[i];\n\n        for (let ia = 0; ia < an.channels.length; ia++)\n        {\n            const chan = an.channels[ia];\n\n            const node = gltf.nodes[chan.target.node];\n            const sampler = an.samplers[chan.sampler];\n\n            const acc = gltf.json.accessors[sampler.input];\n            const bufferIn = gltf.accBuffers[sampler.input];\n\n            const accOut = gltf.json.accessors[sampler.output];\n            const bufferOut = gltf.accBuffers[sampler.output];\n\n            gltf.accBuffersDelete.push(sampler.output, sampler.input);\n\n            if (bufferIn && bufferOut)\n            {\n                let numComps = 1;\n                if (accOut.type == \"VEC2\")numComps = 2;\n                else if (accOut.type == \"VEC3\")numComps = 3;\n                else if (accOut.type == \"VEC4\")numComps = 4;\n                else op.warn(\"unknown accOut.type\", accOut.type);\n\n                const anims = [];\n\n                uniqueAnimNames[an.name] = true;\n\n                for (let k = 0; k < numComps; k++)\n                {\n                    const newAnim = new CABLES.TL.Anim();\n                    // newAnim.name=an.name;\n                    anims.push(newAnim);\n                }\n\n                if (sampler.interpolation == \"LINEAR\") {}\n                else if (sampler.interpolation == \"STEP\") for (let k = 0; k < numComps; k++) anims[k].defaultEasing = CABLES.EASING_ABSOLUTE;\n                else if (sampler.interpolation == \"CUBICSPLINE\") for (let k = 0; k < numComps; k++) anims[k].defaultEasing = CABLES.EASING_CUBICSPLINE;\n                else op.warn(\"unknown interpolation\", sampler.interpolation);\n\n                // console.log(bufferOut)\n\n                // if there is no keyframe for time 0 copy value of first keyframe at time 0\n                if (bufferIn[0] !== 0.0)\n                    for (let k = 0; k < numComps; k++)\n                        anims[k].setValue(0, bufferOut[0 * numComps + k]);\n\n                // console.log(sampler.interpolation,bufferOut.length/numComps)\n\n                for (let j = 0; j < bufferIn.length; j++)\n                {\n                    maxTime = Math.max(bufferIn[j], maxTime);\n\n                    for (let k = 0; k < numComps; k++)\n                    {\n                        if (anims[k].defaultEasing === CABLES.EASING_CUBICSPLINE)\n                        {\n                            const idx = ((j * numComps) * 3 + k);\n\n                            const key = anims[k].setValue(bufferIn[j], bufferOut[idx + numComps]);\n                            key.bezTangIn = bufferOut[idx];\n                            key.bezTangOut = bufferOut[idx + (numComps * 2)];\n\n                            // console.log(an.name,k,bufferOut[idx+1]);\n                        }\n                        else\n                        {\n                            // console.log(an.name,k,bufferOut[j * numComps + k]);\n                            anims[k].setValue(bufferIn[j], bufferOut[j * numComps + k]);\n                        }\n                    }\n                }\n\n                node.setAnim(chan.target.path, an.name, anims);\n            }\n            else\n            {\n                op.warn(\"loadAmins bufferIn undefined \", bufferIn === undefined);\n                op.warn(\"loadAmins bufferOut undefined \", bufferOut === undefined);\n                op.warn(\"loadAmins \", sampler, accOut);\n                op.warn(\"loadAmins num accBuffers\", gltf.accBuffers.length);\n                op.warn(\"loadAmins num accessors\", gltf.json.accessors.length);\n            }\n        }\n    }\n\n    outAnims.set(null);\n    outAnims.set(Object.keys(uniqueAnimNames));\n}\n\nfunction loadCams(gltf)\n{\n    if (!gltf || !gltf.json.cameras) return;\n\n    gltf.cameras = gltf.cameras || [];\n\n    for (let i = 0; i < gltf.nodes.length; i++)\n    {\n        if (gltf.nodes[i].hasOwnProperty(\"camera\"))\n        {\n            const cam = new gltfCamera(gltf, gltf.nodes[i]);\n            gltf.cameras.push(cam);\n        }\n    }\n}\n\nfunction loadAfterDraco()\n{\n    if (!window.DracoDecoder)\n    {\n        setTimeout(() =>\n        {\n            loadAfterDraco();\n        }, 100);\n    }\n\n    reloadSoon();\n}\n\nfunction parseGltf(arrayBuffer)\n{\n    let j = 0, i = 0;\n\n    const gltf = new Gltf();\n    gltf.timing.push(\"Start parsing\", Math.round((performance.now() - gltf.startTime)));\n\n    if (!arrayBuffer) return;\n    const byteArray = new Uint8Array(arrayBuffer);\n    let pos = 0;\n\n    // var string = new TextDecoder(\"utf-8\").decode(byteArray.subarray(pos, 4));\n    const string = Utf8ArrayToStr(byteArray.subarray(pos, 4));\n    pos += 4;\n    if (string != \"glTF\") return;\n\n    gltf.timing.push(\"dataview\", Math.round((performance.now() - gltf.startTime)));\n\n    const dv = new DataView(arrayBuffer);\n    const version = dv.getUint32(pos, le);\n    pos += 4;\n    const size = dv.getUint32(pos, le);\n    pos += 4;\n\n    outVersion.set(version);\n\n    const chunks = [];\n    gltf.chunks = chunks;\n\n    chunks.push(readChunk(dv, byteArray, arrayBuffer, pos));\n    pos += chunks[0].size + CHUNK_HEADER_SIZE;\n    gltf.json = chunks[0].data;\n    outJson.set(gltf.json);\n    outExtensions.set(gltf.json.extensionsUsed || []);\n\n    let ch = readChunk(dv, byteArray, arrayBuffer, pos);\n    while (ch)\n    {\n        chunks.push(ch);\n        pos += ch.size + CHUNK_HEADER_SIZE;\n        ch = readChunk(dv, byteArray, arrayBuffer, pos);\n    }\n\n    gltf.chunks = chunks;\n\n    const views = chunks[0].data.bufferViews;\n    const accessors = chunks[0].data.accessors;\n\n    gltf.timing.push(\"Parse buffers\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.extensionsUsed && gltf.json.extensionsUsed.indexOf(\"KHR_draco_mesh_compression\") > -1)\n    {\n        if (!window.DracoDecoder)\n        {\n            op.setUiError(\"gltfdraco\", \"GLTF draco compression lib not found / add draco op to your patch!\");\n\n            loadAfterDraco();\n            return gltf;\n        }\n        else\n        {\n            gltf.useDraco = true;\n        }\n    }\n\n    op.setUiError(\"gltfdraco\", null);\n    // let accPos = (view.byteOffset || 0) + (acc.byteOffset || 0);\n\n    if (views)\n    {\n        for (i = 0; i < accessors.length; i++)\n        {\n            const acc = accessors[i];\n            const view = views[acc.bufferView];\n\n            let numComps = 0;\n            if (acc.type == \"SCALAR\")numComps = 1;\n            else if (acc.type == \"VEC2\")numComps = 2;\n            else if (acc.type == \"VEC3\")numComps = 3;\n            else if (acc.type == \"VEC4\")numComps = 4;\n            else if (acc.type == \"MAT4\")numComps = 16;\n            else console.error(\"unknown accessor type\", acc.type);\n\n            //   const decoder = new decoderModule.Decoder();\n            //   const decodedGeometry = decodeDracoData(data, decoder);\n            //   // Encode mesh\n            //   encodeMeshToFile(decodedGeometry, decoder);\n\n            //   decoderModule.destroy(decoder);\n            //   decoderModule.destroy(decodedGeometry);\n\n            // 5120 (BYTE)\t1\n            // 5121 (UNSIGNED_BYTE)\t1\n            // 5122 (SHORT)\t2\n\n            if (chunks[1].dataView)\n            {\n                if (view)\n                {\n                    const num = acc.count * numComps;\n                    let accPos = (view.byteOffset || 0) + (acc.byteOffset || 0);\n                    let stride = view.byteStride || 0;\n                    let dataBuff = null;\n\n                    if (acc.componentType == 5126 || acc.componentType == 5125) // 4byte FLOAT or INT\n                    {\n                        stride = stride || 4;\n\n                        const isInt = acc.componentType == 5125;\n                        if (isInt)dataBuff = new Uint32Array(num);\n                        else dataBuff = new Float32Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            if (isInt) dataBuff[j] = chunks[1].dataView.getUint32(accPos, le);\n                            else dataBuff[j] = chunks[1].dataView.getFloat32(accPos, le);\n\n                            if (stride != 4 && (j + 1) % numComps === 0)accPos += stride - (numComps * 4);\n                            accPos += 4;\n                        }\n                    }\n                    else if (acc.componentType == 5123) // UNSIGNED_SHORT\n                    {\n                        stride = stride || 2;\n\n                        dataBuff = new Uint16Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            dataBuff[j] = chunks[1].dataView.getUint16(accPos, le);\n\n                            if (stride != 2 && (j + 1) % numComps === 0) accPos += stride - (numComps * 2);\n\n                            accPos += 2;\n                        }\n                    }\n                    else if (acc.componentType == 5121) // UNSIGNED_BYTE\n                    {\n                        stride = stride || 1;\n\n                        dataBuff = new Uint8Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            dataBuff[j] = chunks[1].dataView.getUint8(accPos, le);\n\n                            if (stride != 1 && (j + 1) % numComps === 0) accPos += stride - (numComps * 1);\n\n                            accPos += 1;\n                        }\n                    }\n\n                    else\n                    {\n                        console.error(\"unknown component type\", acc.componentType);\n                    }\n\n                    gltf.accBuffers.push(dataBuff);\n                }\n                else\n                {\n                    // console.log(\"has no dataview\");\n                }\n            }\n        }\n    }\n\n    gltf.timing.push(\"Parse mesh groups\", Math.round((performance.now() - gltf.startTime)));\n\n    gltf.json.meshes = gltf.json.meshes || [];\n\n    if (gltf.json.meshes)\n    {\n        for (i = 0; i < gltf.json.meshes.length; i++)\n        {\n            const mesh = new gltfMeshGroup(gltf, gltf.json.meshes[i]);\n            gltf.meshes.push(mesh);\n        }\n    }\n\n    gltf.timing.push(\"Parse nodes\", Math.round((performance.now() - gltf.startTime)));\n\n    for (i = 0; i < gltf.json.nodes.length; i++)\n    {\n        if (gltf.json.nodes[i].children)\n            for (j = 0; j < gltf.json.nodes[i].children.length; j++)\n            {\n                gltf.json.nodes[gltf.json.nodes[i].children[j]].isChild = true;\n            }\n    }\n\n    for (i = 0; i < gltf.json.nodes.length; i++)\n    {\n        const node = new gltfNode(gltf.json.nodes[i], gltf);\n        gltf.nodes.push(node);\n    }\n\n    for (i = 0; i < gltf.nodes.length; i++)\n    {\n        const node = gltf.nodes[i];\n\n        if (!node.children) continue;\n        for (let j = 0; j < node.children.length; j++)\n        {\n            gltf.nodes[node.children[j]].parent = node;\n        }\n    }\n\n    for (i = 0; i < gltf.nodes.length; i++)\n    {\n        gltf.nodes[i].initSkin();\n    }\n\n    needsMatUpdate = true;\n\n    gltf.timing.push(\"load anims\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.animations) loadAnims(gltf);\n\n    gltf.timing.push(\"load cameras\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.cameras) loadCams(gltf);\n\n    gltf.timing.push(\"finished\", Math.round((performance.now() - gltf.startTime)));\n\n    return gltf;\n}\n","inc_mesh_js":"let gltfMesh = class\n{\n    constructor(name, prim, gltf, finished)\n    {\n        this.POINTS = 0;\n        this.LINES = 1;\n        this.LINE_LOOP = 2;\n        this.LINE_STRIP = 3;\n        this.TRIANGLES = 4;\n        this.TRIANGLE_STRIP = 5;\n        this.TRIANGLE_FAN = 6;\n\n        this.test = 0;\n        this.name = name;\n        this.submeshIndex = 0;\n        this.material = prim.material;\n        this.mesh = null;\n        this.geom = new CGL.Geometry(\"gltf_\" + this.name);\n        this.geom.verticesIndices = [];\n        this.bounds = null;\n        this.primitive = 4;\n        if (prim.hasOwnProperty(\"mode\")) this.primitive = prim.mode;\n\n        if (prim.hasOwnProperty(\"indices\")) this.geom.verticesIndices = gltf.accBuffers[prim.indices];\n\n        gltf.loadingMeshes = gltf.loadingMeshes || 0;\n        gltf.loadingMeshes++;\n\n        this.materialJson =\n            this._matPbrMetalness =\n            this._matPbrRoughness =\n            this._matDiffuseColor = null;\n\n        if (gltf.json.materials)\n        {\n            if (this.material != -1) this.materialJson = gltf.json.materials[this.material];\n\n            if (this.materialJson && this.materialJson.pbrMetallicRoughness)\n            {\n                if (this.materialJson.pbrMetallicRoughness.baseColorFactor)\n                    this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;\n\n                this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;\n\n                this._matPbrMetalness = this.materialJson.pbrMetallicRoughness.metallicFactor || null;\n                this._matPbrRoughness = this.materialJson.pbrMetallicRoughness.roughnessFactor || null;\n            }\n        }\n\n        if (gltf.useDraco && prim.extensions.KHR_draco_mesh_compression)\n        {\n            const view = gltf.chunks[0].data.bufferViews[prim.extensions.KHR_draco_mesh_compression.bufferView];\n            const num = view.byteLength;\n            const dataBuff = new Int8Array(num);\n            let accPos = (view.byteOffset || 0);// + (acc.byteOffset || 0);\n            for (let j = 0; j < num; j++)\n            {\n                dataBuff[j] = gltf.chunks[1].dataView.getInt8(accPos, le);\n                accPos++;\n            }\n\n            const dracoDecoder = window.DracoDecoder;\n            dracoDecoder.decodeGeometry(dataBuff.buffer, (geometry) =>\n            {\n                const geom = new CGL.Geometry(\"draco mesh \" + name);\n\n                for (let i = 0; i < geometry.attributes.length; i++)\n                {\n                    const attr = geometry.attributes[i];\n\n                    if (attr.name === \"position\") geom.vertices = attr.array;\n                    else if (attr.name === \"normal\") geom.vertexNormals = attr.array;\n                    else if (attr.name === \"uv\") geom.texCoords = attr.array;\n                    else if (attr.name === \"color\") geom.vertexColors = this.calcVertexColors(attr.array);\n                    else if (attr.name === \"joints\") geom.setAttribute(\"attrJoints\", Array.from(attr.array), 4);\n                    else if (attr.name === \"weights\")\n                    {\n                        const arr4 = new Float32Array(attr.array.length / attr.itemSize * 4);\n\n                        for (let k = 0; k < attr.array.length / attr.itemSize; k++)\n                        {\n                            arr4[k * 4] = arr4[k * 4 + 1] = arr4[k * 4 + 2] = arr4[k * 4 + 3] = 0;\n                            for (let j = 0; j < attr.itemSize; j++)\n                                arr4[k * 4 + j] = attr.array[k * attr.itemSize + j];\n                        }\n                        geom.setAttribute(\"attrWeights\", arr4, 4);\n                    }\n                    else op.logWarn(\"unknown draco attrib\", attr);\n                }\n\n                geometry.attributes = null;\n                geom.verticesIndices = geometry.index.array;\n\n                this.setGeom(geom);\n\n                this.mesh = null;\n                gltf.loadingMeshes--;\n                if (finished)finished(this);\n            }, (error) => { op.logError(error); });\n        }\n        else\n        {\n            gltf.loadingMeshes--;\n            this.fillGeomAttribs(gltf, this.geom, prim.attributes);\n\n            if (prim.targets)\n            {\n                console.log(\"prim.targets\", prim.targets.length);\n                for (let j = 0; j < prim.targets.length; j++)\n                {\n                    // var tgeom=new CGL.Geometry(\"gltf_\"+this.name);\n                    let tgeom = this.geom.copy();\n\n                    if (prim.hasOwnProperty(\"indices\")) tgeom.verticesIndices = gltf.accBuffers[prim.indices];\n\n                    this.fillGeomAttribs(gltf, tgeom, prim.targets[j], false);\n\n                    { // calculate normals for final position of morphtarget for later...\n                        for (let i = 0; i < tgeom.vertices.length; i++) tgeom.vertices[i] += this.geom.vertices[i];\n                        tgeom.calculateNormals();\n                        for (let i = 0; i < tgeom.vertices.length; i++) tgeom.vertices[i] -= this.geom.vertices[i];\n                    }\n\n                    this.geom.morphTargets.push(tgeom);\n                }\n            }\n            if (finished)finished(this);\n        }\n    }\n\n    _linearToSrgb(x)\n    {\n        if (x <= 0)\n            return 0;\n        else if (x >= 1)\n            return 1;\n        else if (x < 0.0031308)\n            return x * 12.92;\n        else\n            return Math.pow(x, 1 / 2.2) * 1.055 - 0.055;\n    }\n\n    calcVertexColors(arr)\n    {\n        let vertexColors = null;\n        if (arr instanceof Float32Array)\n        {\n            let div = false;\n            for (let i = 0; i < arr.length; i++)\n            {\n                if (arr[i] > 1)\n                {\n                    div = true;\n                    continue;\n                }\n            }\n\n            if (div)\n                for (let i = 0; i < arr.length; i++) arr[i] /= 65535;\n\n            vertexColors = arr;\n        }\n\n        else if (arr instanceof Uint16Array)\n        {\n            const fb = new Float32Array(arr.length);\n            for (let i = 0; i < arr.length; i++) fb[i] = arr[i] / 65535;\n\n            vertexColors = fb;\n        }\n        else vertexColors = arr;\n\n        for (let i = 0; i < vertexColors.length; i++)\n        {\n            vertexColors[i] = this._linearToSrgb(vertexColors[i]);\n        }\n\n        return vertexColors;\n    }\n\n    fillGeomAttribs(gltf, tgeom, attribs, setGeom)\n    {\n        if (attribs.hasOwnProperty(\"POSITION\")) tgeom.vertices = gltf.accBuffers[attribs.POSITION];\n        if (attribs.hasOwnProperty(\"NORMAL\")) tgeom.vertexNormals = gltf.accBuffers[attribs.NORMAL];\n        if (attribs.hasOwnProperty(\"TANGENT\")) tgeom.tangents = gltf.accBuffers[attribs.TANGENT];\n\n        if (attribs.hasOwnProperty(\"COLOR_0\")) tgeom.vertexColors = this.calcVertexColors(gltf.accBuffers[attribs.COLOR_0]);\n        if (attribs.hasOwnProperty(\"COLOR_1\")) tgeom.setAttribute(\"attrVertColor1\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_1]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_2\")) tgeom.setAttribute(\"attrVertColor2\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_2]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_3\")) tgeom.setAttribute(\"attrVertColor3\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_3]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_4\")) tgeom.setAttribute(\"attrVertColor4\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_4]), 4);\n\n        if (attribs.hasOwnProperty(\"TEXCOORD_0\"))tgeom.texCoords = gltf.accBuffers[attribs.TEXCOORD_0];\n        if (attribs.hasOwnProperty(\"TEXCOORD_1\"))tgeom.setAttribute(\"attrTexCoord1\", gltf.accBuffers[attribs.TEXCOORD_1], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_2\"))tgeom.setAttribute(\"attrTexCoord2\", gltf.accBuffers[attribs.TEXCOORD_2], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_3\"))tgeom.setAttribute(\"attrTexCoord3\", gltf.accBuffers[attribs.TEXCOORD_3], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_4\"))tgeom.setAttribute(\"attrTexCoord4\", gltf.accBuffers[attribs.TEXCOORD_4], 2);\n\n        if (attribs.hasOwnProperty(\"WEIGHTS_0\"))\n        {\n            tgeom.setAttribute(\"attrWeights\", gltf.accBuffers[attribs.WEIGHTS_0], 4);\n        }\n        if (attribs.hasOwnProperty(\"JOINTS_0\"))\n        {\n            if (!gltf.accBuffers[attribs.JOINTS_0])console.log(\"no !gltf.accBuffers[attribs.JOINTS_0]\");\n            tgeom.setAttribute(\"attrJoints\", gltf.accBuffers[attribs.JOINTS_0], 4);\n        }\n\n        if (attribs.hasOwnProperty(\"POSITION\")) gltf.accBuffersDelete.push(attribs.POSITION);\n        if (attribs.hasOwnProperty(\"NORMAL\")) gltf.accBuffersDelete.push(attribs.NORMAL);\n        if (attribs.hasOwnProperty(\"TEXCOORD_0\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_0);\n        if (attribs.hasOwnProperty(\"TANGENT\")) gltf.accBuffersDelete.push(attribs.TANGENT);\n        if (attribs.hasOwnProperty(\"COLOR_0\"))gltf.accBuffersDelete.push(attribs.COLOR_0);\n        if (attribs.hasOwnProperty(\"COLOR_0\"))gltf.accBuffersDelete.push(attribs.COLOR_0);\n        if (attribs.hasOwnProperty(\"COLOR_1\"))gltf.accBuffersDelete.push(attribs.COLOR_1);\n        if (attribs.hasOwnProperty(\"COLOR_2\"))gltf.accBuffersDelete.push(attribs.COLOR_2);\n        if (attribs.hasOwnProperty(\"COLOR_3\"))gltf.accBuffersDelete.push(attribs.COLOR_3);\n\n        if (attribs.hasOwnProperty(\"TEXCOORD_1\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_1);\n        if (attribs.hasOwnProperty(\"TEXCOORD_2\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_3\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_3);\n        if (attribs.hasOwnProperty(\"TEXCOORD_4\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_4);\n\n        if (setGeom !== false) if (tgeom && tgeom.verticesIndices) this.setGeom(tgeom);\n    }\n\n    setGeom(geom)\n    {\n        if (inNormFormat.get() == \"X-ZY\")\n        {\n            for (let i = 0; i < geom.vertexNormals.length; i += 3)\n            {\n                let t = geom.vertexNormals[i + 2];\n                geom.vertexNormals[i + 2] = geom.vertexNormals[i + 1];\n                geom.vertexNormals[i + 1] = -t;\n            }\n        }\n\n        if (inVertFormat.get() == \"XZ-Y\")\n        {\n            for (let i = 0; i < geom.vertices.length; i += 3)\n            {\n                let t = geom.vertices[i + 2];\n                geom.vertices[i + 2] = -geom.vertices[i + 1];\n                geom.vertices[i + 1] = t;\n            }\n        }\n\n        if (this.primitive == this.TRIANGLES)\n        {\n            if (!geom.vertexNormals.length || inCalcNormals.get()) geom.calculateNormals();\n\n            if ((!geom.biTangents || geom.biTangents.length == 0) && geom.tangents)\n            {\n                const bitan = vec3.create();\n                const tan = vec3.create();\n\n                const tangents = geom.tangents;\n                geom.tangents = new Float32Array(tangents.length / 4 * 3);\n                geom.biTangents = new Float32Array(tangents.length / 4 * 3);\n\n                for (let i = 0; i < tangents.length; i += 4)\n                {\n                    const idx = i / 4 * 3;\n\n                    vec3.cross(\n                        bitan,\n                        [geom.vertexNormals[idx], geom.vertexNormals[idx + 1], geom.vertexNormals[idx + 2]],\n                        [tangents[i], tangents[i + 1], tangents[i + 2]]\n                    );\n\n                    vec3.div(bitan, bitan, [tangents[i + 3], tangents[i + 3], tangents[i + 3]]);\n                    vec3.normalize(bitan, bitan);\n\n                    geom.biTangents[idx + 0] = bitan[0];\n                    geom.biTangents[idx + 1] = bitan[1];\n                    geom.biTangents[idx + 2] = bitan[2];\n\n                    geom.tangents[idx + 0] = tangents[i + 0];\n                    geom.tangents[idx + 1] = tangents[i + 1];\n                    geom.tangents[idx + 2] = tangents[i + 2];\n                }\n            }\n\n            if (geom.tangents.length === 0 || inCalcNormals.get()) geom.calcTangentsBitangents();\n        }\n\n        this.geom = geom;\n\n        this.bounds = geom.getBounds();\n    }\n\n    render(cgl, ignoreMaterial, skinRenderer)\n    {\n        if (!this.mesh && this.geom && this.geom.verticesIndices)\n        {\n            let g = this.geom;\n            if (this.geom.vertices.length / 3 > 64000)\n            {\n                g = this.geom.copy();\n                g.unIndex(false, true);\n            }\n\n            let glprim;\n            if (this.primitive == this.TRIANGLES)glprim = cgl.gl.TRIANGLES;\n            else if (this.primitive == this.LINES)glprim = cgl.gl.LINES;\n            else if (this.primitive == this.LINE_STRIP)glprim = cgl.gl.LINE_STRIP;\n            else if (this.primitive == this.POINTS)glprim = cgl.gl.POINTS;\n            else\n            {\n                op.logWarn(\"unknown primitive type\", this);\n            }\n\n            this.mesh = new CGL.Mesh(cgl, g, glprim);\n            this.mesh._geom = null;\n        }\n        else\n        {\n            // update morphTargets\n            if (this.geom && this.geom.morphTargets.length)\n            {\n                this.morphGeom = this.geom.copy();\n\n                this.test = time * 11.7;\n\n                if (this.test >= this.geom.morphTargets.length - 1) this.test = 0;\n\n                const mt = this.geom.morphTargets[Math.floor(this.test)];\n                const mt2 = this.geom.morphTargets[Math.floor(this.test + 1)];\n\n                if (mt && mt.vertices && mt2)\n                {\n                    if (this.morphGeom.vertexNormals.length != mt.vertexNormals.length)\n                        this.morphGeom.vertexNormals = new Float32Array(mt.vertexNormals.length);\n\n                    const fract = this.test % 1;\n                    for (let i = 0; i < this.morphGeom.vertices.length; i++)\n                    {\n                        this.morphGeom.vertices[i] =\n                            this.geom.vertices[i] +\n                            (1.0 - fract) * mt.vertices[i] +\n                            fract * mt2.vertices[i];\n\n                        this.morphGeom.vertexNormals[i] =\n                            (1.0 - fract) * mt.vertexNormals[i] +\n                            fract * mt2.vertexNormals[i];\n                    }\n\n                    this.mesh.updateNormals(this.morphGeom);\n                    this.mesh.updateVertices(this.morphGeom);\n                }\n            }\n\n            let useMat = !ignoreMaterial && this.material != -1 && gltf.shaders[this.material];\n            if (skinRenderer)useMat = false;\n\n            if (useMat) cgl.pushShader(gltf.shaders[this.material]);\n\n            const currentShader = cgl.getShader() || {};\n            const uniDiff = currentShader.uniformColorDiffuse;\n\n            const uniPbrMetalness = currentShader.uniformPbrMetalness;\n            const uniPbrRoughness = currentShader.uniformPbrRoughness;\n\n            if (!gltf.shaders[this.material] && inUseMatProps.get())\n            {\n                if (uniDiff && this._matDiffuseColor)\n                {\n                    this._matDiffuseColorOrig = [uniDiff.getValue()[0], uniDiff.getValue()[1], uniDiff.getValue()[2], uniDiff.getValue()[3]];\n                    uniDiff.setValue(this._matDiffuseColor);\n                }\n\n                if (uniPbrMetalness)\n                    if (this._matPbrMetalness != null)\n                    {\n                        this._matPbrMetalnessOrig = uniPbrMetalness.getValue();\n                        uniPbrMetalness.setValue(this._matPbrMetalness);\n                    }\n                    else\n                        uniPbrMetalness.setValue(0);\n\n                if (uniPbrRoughness)\n                    if (this._matPbrRoughness != null)\n                    {\n                        this._matPbrRoughnessOrig = uniPbrRoughness.getValue();\n                        uniPbrRoughness.setValue(this._matPbrRoughness);\n                    }\n                    else uniPbrRoughness.setValue(0);\n            }\n\n            if (this.mesh) this.mesh.render(cgl.getShader(), ignoreMaterial);\n\n            if (inUseMatProps.get())\n            {\n                if (uniDiff && this._matDiffuseColor) uniDiff.setValue(this._matDiffuseColorOrig);\n                if (uniPbrMetalness && this._matPbrMetalnessOrig != undefined) uniPbrMetalness.setValue(this._matPbrMetalnessOrig);\n                if (uniPbrRoughness && this._matPbrRoughnessOrig != undefined) uniPbrRoughness.setValue(this._matPbrRoughnessOrig);\n            }\n\n            if (useMat) cgl.popShader();\n        }\n    }\n};\n","inc_meshGroup_js":"const gltfMeshGroup = class\n{\n    constructor(gltf, m)\n    {\n        this.bounds = new CGL.BoundingBox();\n        this.meshes = [];\n        this.name = m.name;\n        const prims = m.primitives;\n\n        for (let i = 0; i < prims.length; i++)\n        {\n            const mesh = new gltfMesh(this.name, prims[i], gltf,\n                (mesh) =>\n                {\n                    this.bounds.apply(mesh.bounds);\n                });\n\n            mesh.submeshIndex = i;\n            this.meshes.push(mesh);\n        }\n    }\n\n    render(cgl, ignoreMat, skinRenderer, _time)\n    {\n        for (let i = 0; i < this.meshes.length; i++)\n        {\n            const useMat = gltf.shaders[this.meshes[i].material];\n\n            if (!ignoreMat && useMat) cgl.pushShader(gltf.shaders[this.meshes[i].material]);\n            // console.log(gltf.shaders[this.meshes[i].material],this.meshes[i].material)\n            if (skinRenderer)skinRenderer.renderStart(cgl, _time);\n\n            this.meshes[i].render(cgl, ignoreMat, skinRenderer, _time);\n            if (skinRenderer)skinRenderer.renderFinish(cgl);\n            if (!ignoreMat && useMat) cgl.popShader();\n        }\n    }\n};\n","inc_node_js":"const gltfNode = class\n{\n    constructor(node, gltf)\n    {\n        this.isChild = node.isChild || false;\n        this.name = node.name;\n        if (node.hasOwnProperty(\"camera\")) this.camera = node.camera;\n        this.hidden = false;\n        this.mat = mat4.create();\n        this._animMat = mat4.create();\n        this._tempMat = mat4.create();\n        this._tempQuat = quat.create();\n        this._tempRotmat = mat4.create();\n        this.mesh = null;\n        this.children = [];\n        this._node = node;\n        this._gltf = gltf;\n        this.absMat = mat4.create();\n        this.addTranslate = null;\n        this._tempAnimScale = null;\n        this.addMulMat = null;\n        this.updateMatrix();\n        this._animActions = {};\n        this.skinRenderer = null;\n        this.copies = [];\n    }\n\n    get skin()\n    {\n        if (this._node.hasOwnProperty(\"skin\")) return this._node.skin;\n        else return -1;\n    }\n\n    copy()\n    {\n        this.isCopy = true;\n        // console.log(this);\n        const n = new gltfNode(this._node, this._gltf);\n        n.copyOf = this;\n\n        n._animActions = this._animActions;\n        n.children = this.children;\n        n.skinRenderer = new GltfSkin(n);\n\n        // console.log(\"COPY!!!\");\n        // console.log((n._animActions));\n\n        // console.log(this._animActions);\n\n        this.updateMatrix();\n        return n;\n    }\n\n    hasSkin()\n    {\n        if (this._node.hasOwnProperty(\"skin\")) return this._gltf.json.skins[this._node.skin].name || \"unknown\";\n        return false;\n    }\n\n    initSkin()\n    {\n        if (this.skin > -1)\n        {\n            this.skinRenderer = new GltfSkin(this);\n        }\n    }\n\n    updateMatrix()\n    {\n        mat4.identity(this.mat);\n        if (this._node.translation) mat4.translate(this.mat, this.mat, this._node.translation);\n\n        if (this._node.rotation)\n        {\n            const rotmat = mat4.create();\n            this._rot = this._node.rotation;\n\n            mat4.fromQuat(rotmat, this._node.rotation);\n            mat4.mul(this.mat, this.mat, rotmat);\n        }\n\n        if (this._node.scale)\n        {\n            this._scale = this._node.scale;\n            mat4.scale(this.mat, this.mat, this._scale);\n        }\n\n        if (this._node.hasOwnProperty(\"mesh\"))\n        {\n            this.mesh = this._gltf.meshes[this._node.mesh];\n            if (this.isCopy)\n            {\n                console.log(this.mesh);\n            }\n        }\n\n        if (this._node.children)\n        {\n            for (let i = 0; i < this._node.children.length; i++)\n            {\n                this._gltf.json.nodes[i].isChild = true;\n                if (this._gltf.nodes[this._node.children[i]]) this._gltf.nodes[this._node.children[i]].isChild = true;\n                this.children.push(this._node.children[i]);\n            }\n        }\n    }\n\n    unHide()\n    {\n        this.hidden = false;\n        for (let i = 0; i < this.children.length; i++)\n            if (this.children[i].unHide) this.children[i].unHide();\n    }\n\n    calcBounds(gltf, mat, bounds)\n    {\n        const localMat = mat4.create();\n\n        if (mat) mat4.copy(localMat, mat);\n        if (this.mat) mat4.mul(localMat, localMat, this.mat);\n\n        if (this.mesh)\n        {\n            const bb = this.mesh.bounds.copy();\n            bb.mulMat4(localMat);\n            bounds.apply(bb);\n\n            if (bounds.changed)\n            {\n                boundingPoints.push(\n                    bb._min[0] || 0, bb._min[1] || 0, bb._min[2] || 0,\n                    bb._max[0] || 0, bb._max[1] || 0, bb._max[2] || 0);\n            }\n        }\n\n        for (let i = 0; i < this.children.length; i++)\n        {\n            if (gltf.nodes[this.children[i]] && gltf.nodes[this.children[i]].calcBounds)\n            {\n                const b = gltf.nodes[this.children[i]].calcBounds(gltf, localMat, bounds);\n\n                bounds.apply(b);\n            }\n        }\n\n        if (bounds.changed) return bounds;\n        else return null;\n    }\n\n    setAnimAction(name)\n    {\n        // console.log(\"setAnimAction:\", name);\n        if (!name) return;\n\n        this._currentAnimaction = name;\n\n        if (name && !this._animActions[name])\n        {\n            // console.log(\"no action found:\", name,this._animActions);\n            return null;\n        }\n\n        // else console.log(\"YES action found:\", name);\n        // console.log(this._animActions);\n\n        for (let path in this._animActions[name])\n        {\n            if (path == \"translation\") this._animTrans = this._animActions[name][path];\n            else if (path == \"rotation\") this._animRot = this._animActions[name][path];\n            else if (path == \"scale\") this._animScale = this._animActions[name][path];\n            else console.warn(\"unknown anim path\", path, this._animActions[name][path]);\n        }\n    }\n\n    setAnim(path, name, anims)\n    {\n        if (!path || !name || !anims) return;\n\n        // console.log(\"setanim\", this._node.name, path, name, anims);\n\n        this._animActions[name] = this._animActions[name] || {};\n\n        // console.log(this._animActions);\n        // debugger;\n\n        // for (let i = 0; i < this.copies.length; i++) this.copies[i]._animActions = this._animActions;\n\n        if (this._animActions[name][path]) op.warn(\"animation action path already exists\", name, path, this._animActions[name][path]);\n\n        this._animActions[name][path] = anims;\n\n        if (path == \"translation\") this._animTrans = anims;\n        else if (path == \"rotation\") this._animRot = anims;\n        else if (path == \"scale\") this._animScale = anims;\n        else console.warn(\"unknown anim path\", path, anims);\n    }\n\n    modelMatLocal()\n    {\n        return this._animMat || this.mat;\n    }\n\n    modelMatAbs()\n    {\n        return this.absMat;\n    }\n\n    transform(cgl, _time)\n    {\n        if (!_time && _time != 0)_time = time;\n\n        this._lastTimeTrans = _time;\n\n        // console.log(this._rot)\n\n        gltfTransforms++;\n\n        if (!this._animTrans && !this._animRot && !this._animScale)\n        {\n            mat4.mul(cgl.mMatrix, cgl.mMatrix, this.mat);\n            this._animMat = null;\n        }\n        else\n        {\n            this._animMat = this._animMat || mat4.create();\n            mat4.identity(this._animMat);\n\n            const playAnims = true;\n\n            if (playAnims && this._animTrans)\n            {\n                mat4.translate(this._animMat, this._animMat, [\n                    this._animTrans[0].getValue(_time),\n                    this._animTrans[1].getValue(_time),\n                    this._animTrans[2].getValue(_time)]);\n            }\n            else\n            if (this._node.translation) mat4.translate(this._animMat, this._animMat, this._node.translation);\n\n            if (playAnims && this._animRot)\n            {\n                if (this._animRot[0].defaultEasing == CABLES.EASING_LINEAR) CABLES.TL.Anim.slerpQuaternion(_time, this._tempQuat, this._animRot[0], this._animRot[1], this._animRot[2], this._animRot[3]);\n                else if (this._animRot[0].defaultEasing == CABLES.EASING_ABSOLUTE)\n                {\n                    this._tempQuat[0] = this._animRot[0].getValue(_time);\n                    this._tempQuat[1] = this._animRot[1].getValue(_time);\n                    this._tempQuat[2] = this._animRot[2].getValue(_time);\n                    this._tempQuat[3] = this._animRot[3].getValue(_time);\n                }\n                else if (this._animRot[0].defaultEasing == CABLES.EASING_CUBICSPLINE)\n                {\n                    CABLES.TL.Anim.slerpQuaternion(_time, this._tempQuat, this._animRot[0], this._animRot[1], this._animRot[2], this._animRot[3]);\n                }\n\n                mat4.fromQuat(this._tempMat, this._tempQuat);\n                mat4.mul(this._animMat, this._animMat, this._tempMat);\n            }\n            else if (this._rot)\n            {\n                mat4.fromQuat(this._tempRotmat, this._rot);\n                mat4.mul(this._animMat, this._animMat, this._tempRotmat);\n            }\n\n            if (playAnims && this._animScale)\n            {\n                if (!this._tempAnimScale) this._tempAnimScale = [1, 1, 1];\n                this._tempAnimScale[0] = this._animScale[0].getValue(_time);\n                this._tempAnimScale[1] = this._animScale[1].getValue(_time);\n                this._tempAnimScale[2] = this._animScale[2].getValue(_time);\n                mat4.scale(this._animMat, this._animMat, this._tempAnimScale);\n            }\n            else if (this._scale) mat4.scale(this._animMat, this._animMat, this._scale);\n\n            mat4.mul(cgl.mMatrix, cgl.mMatrix, this._animMat);\n        }\n\n        if (this.addTranslate) mat4.translate(cgl.mMatrix, cgl.mMatrix, this.addTranslate);\n\n        if (this.addMulMat) mat4.mul(cgl.mMatrix, cgl.mMatrix, this.addMulMat);\n\n        mat4.copy(this.absMat, cgl.mMatrix);\n    }\n\n    render(cgl, dontTransform, dontDrawMesh, ignoreMaterial, ignoreChilds, drawHidden, _time)\n    {\n        if (!dontTransform) cgl.pushModelMatrix();\n\n        if (_time === undefined) _time = gltf.time;\n\n        if (!dontTransform || this.skinRenderer) this.transform(cgl, _time);\n\n        if (this.hidden && !drawHidden)\n        {\n        }\n        else\n        {\n            if (this.skinRenderer)\n            {\n                this.skinRenderer.time = _time;\n                if (!dontDrawMesh)\n                    this.mesh.render(cgl, ignoreMaterial, this.skinRenderer, _time);\n            }\n            else\n            {\n                if (this.mesh && !dontDrawMesh)\n                    this.mesh.render(cgl, ignoreMaterial, null, _time);\n            }\n        }\n\n        if (!ignoreChilds && !this.hidden)\n            for (let i = 0; i < this.children.length; i++)\n                if (gltf.nodes[this.children[i]])\n                    gltf.nodes[this.children[i]].render(cgl, dontTransform, dontDrawMesh, ignoreMaterial, ignoreChilds, drawHidden, _time);\n\n        if (!dontTransform)cgl.popModelMatrix();\n    }\n};\n","inc_print_js":"let tab = null;\n\nfunction closeTab()\n{\n    if (tab)gui.mainTabs.closeTab(tab.id);\n    tab = null;\n}\n\nfunction printNode(html, node, level)\n{\n    if (!gltf) return;\n\n    html += \"<tr class=\\\"row\\\">\";\n\n    let ident = \"\";\n    let identSpace = \"\";\n\n    for (let i = 1; i < level; i++)\n    {\n        identSpace += \"&nbsp;&nbsp;&nbsp;\";\n        let identClass = \"identBg\";\n        if (i == 1)identClass = \"identBgLevel0\";\n        ident += \"<td class=\\\"ident \" + identClass + \"\\\" ><div style=\\\"\\\"></div></td>\";\n    }\n    let id = CABLES.uuid();\n    html += ident;\n    html += \"<td colspan=\\\"\" + (21 - level) + \"\\\">\";\n    // html+='<div style=\"display:inline-block;border:0px solid red;height:10px;width:'+level*10+'px\"></div>';\n\n    if (node.mesh && node.mesh.meshes.length)html += \"<span class=\\\"icon icon-cube\\\"></span>&nbsp;\";\n    else html += \"<span class=\\\"icon icon-box-select\\\"></span> &nbsp;\";\n\n    html += node.name + \"</td><td></td>\";\n\n    if (node.mesh)\n    {\n        html += \"<td>\";\n        for (let i = 0; i < node.mesh.meshes.length; i++)\n        {\n            if (i > 0)html += \", \";\n            html += node.mesh.meshes[i].name;\n        }\n\n        html += \"</td>\";\n\n        html += \"<td>\";\n        html += node.hasSkin() || \"-\";\n        html += \"</td>\";\n\n        html += \"<td>\";\n        let countMats = 0;\n        for (let i = 0; i < node.mesh.meshes.length; i++)\n        {\n            if (countMats > 0)html += \", \";\n            if (gltf.json.materials && node.mesh.meshes[i].hasOwnProperty(\"material\"))\n            {\n                if (gltf.json.materials[node.mesh.meshes[i].material])\n                {\n                    html += gltf.json.materials[node.mesh.meshes[i].material].name;\n                    countMats++;\n                }\n            }\n        }\n        if (countMats == 0)html += \"none\";\n        html += \"</td>\";\n    }\n    else\n    {\n        html += \"<td>-</td><td>-</td><td>-</td>\";\n    }\n\n    html += \"<td>\";\n    if (node._animRot || node._animScale || node._animTrans)\n    {\n        if (node._animRot) html += \"Rot \";\n        if (node._animScale) html += \"Scale \";\n        if (node._animTrans) html += \"Trans \";\n    }\n    else html += \"None\";\n    html += \"</td>\";\n\n    html += \"<td>\";\n    let hideclass = \"\";\n    if (node.hidden)hideclass = \"node-hidden\";\n\n    // html+='';\n    html += \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"','transform')\\\" class=\\\"treebutton\\\">Transform</a>\";\n    html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"','hierarchy')\\\" class=\\\"treebutton\\\">Hierarchy</a>\";\n    html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"')\\\" class=\\\"treebutton\\\">Node</a>\";\n\n    if (node.hasSkin())\n        html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"',false,{skin:true});\\\" class=\\\"treebutton\\\">Skin</a>\";\n\n    html += \"</td><td>\";\n    html += \"&nbsp;<span class=\\\"icon iconhover icon-eye \" + hideclass + \"\\\" onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').toggleNodeVisibility('\" + node.name + \"');this.classList.toggle('node-hidden');\\\"></span>\";\n    html += \"</td>\";\n\n    html += \"</tr>\";\n\n    if (node.children)\n    {\n        for (let i = 0; i < node.children.length; i++)\n            html = printNode(html, gltf.nodes[node.children[i]], level + 1);\n    }\n\n    return html;\n}\n\nfunction printMaterial(mat, idx)\n{\n    let html = \"<tr>\";\n    html += \" <td>\" + idx + \"</td>\";\n    html += \" <td>\" + mat.name + \"</td>\";\n    // html+=' <td><a onclick=\"\" class=\"treebutton\">Assign</a><td>';\n\n    html += \" <td>\";\n    if (mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorFactor)\n    {\n        let rgb = \"\";\n        rgb += \"\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[0] * 255);\n        rgb += \",\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[1] * 255);\n        rgb += \",\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[2] * 255);\n\n        html += \"<div style=\\\"width:15px;height:15px;;background-color:rgb(\" + rgb + \")\\\">&nbsp;</a>\";\n    }\n    html += \" <td style=\\\"\\\">\" + (gltf.shaders[idx] ? \"-\" : \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').assignMaterial('\" + mat.name + \"')\\\" class=\\\"treebutton\\\">Assign</a>\") + \"<td>\";\n    html += \"<td>\";\n\n    html += \"</tr>\";\n    return html;\n}\n\nfunction printInfo()\n{\n    if (!gltf) return;\n\n    const startTime = performance.now();\n    const sizes = {};\n    let html = \"<div style=\\\"overflow:scroll;width:100%;height:100%\\\">\";\n\n    html += \"generator:\" + gltf.json.asset.generator;\n\n    let numNodes = 0;\n    if (gltf.json.nodes)numNodes = gltf.json.nodes.length;\n    html += \"<div id=\\\"groupNodes\\\">Nodes (\" + numNodes + \")</div>\";\n\n    html += \"<table id=\\\"sectionNodes\\\" class=\\\"table treetable\\\">\";\n\n    html += \"<tr>\";\n    html += \" <th colspan=\\\"21\\\">Name</th>\";\n    html += \" <th>Mesh</th>\";\n    html += \" <th>Skin</th>\";\n    html += \" <th>Material</th>\";\n    html += \" <th>Anim</th>\";\n    html += \" <th>Expose</th>\";\n    html += \" <th></th>\";\n    html += \"</tr>\";\n\n    for (let i = 0; i < gltf.nodes.length; i++)\n    {\n        if (!gltf.nodes[i].isChild)\n            html = printNode(html, gltf.nodes[i], 1);\n    }\n    html += \"</table>\";\n\n    // / //////////////////\n\n    let numMaterials = 0;\n    if (gltf.json.materials)numMaterials = gltf.json.materials.length;\n    html += \"<div id=\\\"groupMaterials\\\">Materials (\" + numMaterials + \")</div>\";\n\n    if (!gltf.json.materials || gltf.json.materials.length == 0)\n    {\n    }\n    else\n    {\n        html += \"<table id=\\\"materialtable\\\"  class=\\\"table treetable\\\">\";\n        html += \"<tr>\";\n        html += \" <th>Index</th>\";\n        html += \" <th>Name</th>\";\n        html += \" <th>Color</th>\";\n        html += \" <th>Function</th>\";\n        html += \" <th></th>\";\n        html += \"</tr>\";\n        for (let i = 0; i < gltf.json.materials.length; i++)\n        {\n            html += printMaterial(gltf.json.materials[i], i);\n        }\n        html += \"</table>\";\n    }\n\n    // / ///////////////////////\n\n    html += \"<div id=\\\"groupMeshes\\\">Meshes (\" + gltf.json.meshes.length + \")</div>\";\n\n    html += \"<table id=\\\"meshestable\\\"  class=\\\"table treetable\\\">\";\n    html += \"<tr>\";\n    html += \" <th>Name</th>\";\n    html += \" <th>Node</th>\";\n    html += \" <th>Material</th>\";\n    html += \" <th>Vertices</th>\";\n    html += \" <th>Attributes</th>\";\n    html += \"</tr>\";\n\n    let sizeBufferViews = [];\n    sizes.meshes = 0;\n\n    console.log(gltf);\n\n    for (let i = 0; i < gltf.json.meshes.length; i++)\n    {\n        html += \"<tr>\";\n        html += \"<td>\" + gltf.json.meshes[i].name + \"</td>\";\n\n        html += \"<td>\";\n        let count = 0;\n        let nodename = \"\";\n        for (var j = 0; j < gltf.json.nodes.length; j++)\n        {\n            if (gltf.json.nodes[j].mesh == i)\n            {\n                count++;\n                if (count == 1)\n                {\n                    nodename = gltf.json.nodes[j].name;\n                }\n            }\n        }\n        if (count > 1) html += (count) + \" nodes (\" + nodename + \" ...)\";\n        else html += nodename;\n        html += \"</td>\";\n\n        // -------\n\n        html += \"<td>\";\n        for (var j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            if (gltf.json.meshes[i].primitives[j].hasOwnProperty(\"material\"))\n            {\n                if (gltf.json.materials[gltf.json.meshes[i]])\n                {\n                    html += gltf.json.materials[gltf.json.meshes[i].primitives[j].material].name + \" \";\n                }\n            }\n            else html += \"None\";\n        }\n        html += \"</td>\";\n\n        html += \"<td>\";\n        let numVerts = 0;\n        for (var j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            if (gltf.json.meshes[i].primitives[j].attributes.POSITION != undefined)\n            {\n                let v = parseInt(gltf.json.accessors[gltf.json.meshes[i].primitives[j].attributes.POSITION].count);\n                numVerts += v;\n                html += \"\" + v + \"<br/>\";\n            }\n            else html += \"-<br/>\";\n        }\n\n        if (gltf.json.meshes[i].primitives.length > 0)\n            html += \"=\" + numVerts;\n        html += \"</td>\";\n\n        html += \"<td style=\\\"vertical-align:top;\\\">\";\n        for (let j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            html += Object.keys(gltf.json.meshes[i].primitives[j].attributes);\n            html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeGeom('\" + gltf.json.meshes[i].name + \"',\" + j + \")\\\" class=\\\"treebutton\\\">Geometry</a>\";\n            html += \"<br/>\";\n        }\n        html += \"</td>\";\n        html += \"</tr>\";\n\n        for (let j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            const accessor = gltf.json.accessors[gltf.json.meshes[i].primitives[j].indices];\n            if (accessor)\n            {\n                let bufView = accessor.bufferView;\n\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    if (gltf.json.bufferViews[bufView])sizes.meshes += gltf.json.bufferViews[bufView].byteLength;\n                }\n            }\n\n            for (let k in gltf.json.meshes[i].primitives[j].attributes)\n            {\n                const attr = gltf.json.meshes[i].primitives[j].attributes[k];\n                const bufView2 = gltf.json.accessors[attr].bufferView;\n\n                if (sizeBufferViews.indexOf(bufView2) == -1)\n                {\n                    sizeBufferViews.push(bufView2);\n                    if (gltf.json.bufferViews[bufView2])sizes.meshes += gltf.json.bufferViews[bufView2].byteLength;\n                }\n            }\n        }\n    }\n    html += \"</table>\";\n\n    // / //////////////////////////////////\n\n    let numAnims = 0;\n    if (gltf.json.animations)numAnims = gltf.json.animations.length;\n    html += \"<div id=\\\"groupAnims\\\">Animations (\" + numAnims + \")</div>\";\n\n    if (gltf.json.animations)\n    {\n        html += \"<table id=\\\"sectionAnim\\\" class=\\\"table treetable\\\">\";\n        html += \"<tr>\";\n        html += \"  <th>Name</th>\";\n        html += \"  <th>Target node</th>\";\n        html += \"  <th>Path</th>\";\n        html += \"  <th>Interpolation</th>\";\n        html += \"  <th>Keys</th>\";\n        html += \"</tr>\";\n\n        sizes.animations = 0;\n\n        for (let i = 0; i < gltf.json.animations.length; i++)\n        {\n            for (let j = 0; j < gltf.json.animations[i].samplers.length; j++)\n            {\n                let bufView = gltf.json.accessors[gltf.json.animations[i].samplers[j].input].bufferView;\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    sizes.animations += gltf.json.bufferViews[bufView].byteLength;\n                }\n\n                bufView = gltf.json.accessors[gltf.json.animations[i].samplers[j].output].bufferView;\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    sizes.animations += gltf.json.bufferViews[bufView].byteLength;\n                }\n            }\n\n            for (let j = 0; j < gltf.json.animations[i].channels.length; j++)\n            {\n                html += \"<tr>\";\n                html += \"  <td> Anim \" + i + \": \" + gltf.json.animations[i].name + \"</td>\";\n\n                html += \"  <td>\" + gltf.nodes[gltf.json.animations[i].channels[j].target.node].name + \"</td>\";\n                html += \"  <td>\";\n                html += gltf.json.animations[i].channels[j].target.path + \" \";\n                html += \"  </td>\";\n\n                const smplidx = gltf.json.animations[i].channels[j].sampler;\n                const smplr = gltf.json.animations[i].samplers[smplidx];\n\n                html += \"  <td>\" + smplr.interpolation + \"</td>\";\n\n                html += \"  <td>\" + gltf.json.accessors[smplr.output].count;\n\n                html += \"&nbsp;&nbsp;<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').showAnim('\" + i + \"','\" + j + \"')\\\" class=\\\"icon icon-search\\\"></a>\";\n\n                html += \"</td>\";\n\n                html += \"</tr>\";\n            }\n        }\n        html += \"</table>\";\n    }\n    else\n    {\n\n    }\n\n    // / ///////////////////\n\n    let numImages = 0;\n    if (gltf.json.images)numImages = gltf.json.images.length;\n    html += \"<div id=\\\"groupImages\\\">Images (\" + numImages + \")</div>\";\n\n    if (gltf.json.images)\n    {\n        html += \"<table id=\\\"sectionImages\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th>type</th>\";\n        html += \"  <th>func</th>\";\n\n        html += \"</tr>\";\n\n        sizes.images = 0;\n\n        for (let i = 0; i < gltf.json.images.length; i++)\n        {\n            if (gltf.json.images[i].bufferView)\n                sizes.images += gltf.json.bufferViews[gltf.json.images[i].bufferView].byteLength;\n\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.images[i].name + \"</td>\";\n            html += \"<td>\" + gltf.json.images[i].mimeType + \"</td>\";\n            html += \"<td>\";\n\n            let name = gltf.json.images[i].name;\n            if (name === undefined)name = gltf.json.images[i].bufferView;\n\n            html += \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeTexture('\" + name + \"')\\\" class=\\\"treebutton\\\">Expose</a>\";\n            html += \"</td>\";\n\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / ///////////////////////\n\n    let numCameras = 0;\n    if (gltf.json.cameras)numCameras = gltf.json.cameras.length;\n    html += \"<div id=\\\"groupCameras\\\">Cameras (\" + numCameras + \")</div>\";\n\n    if (gltf.json.cameras)\n    {\n        html += \"<table id=\\\"sectionCameras\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th>type</th>\";\n        html += \"  <th>info</th>\";\n        html += \"</tr>\";\n\n        for (let i = 0; i < gltf.json.cameras.length; i++)\n        {\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.cameras[i].name + \"</td>\";\n            html += \"<td>\" + gltf.json.cameras[i].type + \"</td>\";\n            html += \"<td>\";\n            html += \"yfov: \" + Math.round(gltf.json.cameras[i].perspective.yfov * 100) / 100;\n            html += \", \";\n            html += \"zfar: \" + Math.round(gltf.json.cameras[i].perspective.zfar * 100) / 100;\n            html += \", \";\n            html += \"znear: \" + Math.round(gltf.json.cameras[i].perspective.znear * 100) / 100;\n            html += \"</td>\";\n\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / ////////////////////////////////////\n\n    let numSkins = 0;\n    if (gltf.json.skins)numSkins = gltf.json.skins.length;\n    html += \"<div id=\\\"groupSkins\\\">Skins (\" + numSkins + \")</div>\";\n\n    if (gltf.json.skins)\n    {\n        // html += \"<h3>Skins (\" + gltf.json.skins.length + \")</h3>\";\n        html += \"<table id=\\\"sectionSkins\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th></th>\";\n        html += \"  <th>total joints</th>\";\n        html += \"</tr>\";\n\n        for (let i = 0; i < gltf.json.skins.length; i++)\n        {\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.skins[i].name + \"</td>\";\n            html += \"<td>\" + \"</td>\";\n            html += \"<td>\" + gltf.json.skins[i].joints.length + \"</td>\";\n            html += \"<td>\";\n            html += \"</td>\";\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / //////////////////////////\n\n    let sizeBin = 0;\n    if (gltf.json.buffers)\n        sizeBin = gltf.json.buffers[0].byteLength;\n\n    html += \"<div id=\\\"groupBinary\\\">File Size Allocation (\" + Math.round(sizeBin / 1024) + \"k )</div>\";\n\n    html += \"<table id=\\\"sectionBinary\\\" class=\\\"table treetable\\\">\";\n    html += \"<tr>\";\n    html += \"  <th>name</th>\";\n    html += \"  <th>size</th>\";\n    html += \"  <th>%</th>\";\n    html += \"</tr>\";\n    let sizeUnknown = sizeBin;\n    for (let i in sizes)\n    {\n        // html+=i+':'+Math.round(sizes[i]/1024);\n        html += \"<tr>\";\n        html += \"<td>\" + i + \"</td>\";\n        html += \"<td>\" + readableSize(sizes[i]) + \" </td>\";\n        html += \"<td>\" + Math.round(sizes[i] / sizeBin * 100) + \"% </td>\";\n        html += \"<tr>\";\n        sizeUnknown -= sizes[i];\n    }\n\n    if (sizeUnknown != 0)\n    {\n        html += \"<tr>\";\n        html += \"<td>unknown</td>\";\n        html += \"<td>\" + readableSize(sizeUnknown) + \" </td>\";\n        html += \"<td>\" + Math.round(sizeUnknown / sizeBin * 100) + \"% </td>\";\n        html += \"<tr>\";\n    }\n\n    html += \"</table>\";\n    html += \"</div>\";\n\n    tab = new CABLES.UI.Tab(\"GLTF\", { \"icon\": \"cube\", \"infotext\": \"tab_gltf\", \"padding\": true, \"singleton\": true });\n    gui.mainTabs.addTab(tab, true);\n\n    tab.addEventListener(\"onClose\", closeTab);\n    tab.html(html);\n\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupNodes\"), ele.byId(\"sectionNodes\"), false);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupMaterials\"), ele.byId(\"materialtable\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupAnims\"), ele.byId(\"sectionAnim\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupMeshes\"), ele.byId(\"meshestable\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupCameras\"), ele.byId(\"sectionCameras\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupImages\"), ele.byId(\"sectionImages\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupSkins\"), ele.byId(\"sectionSkins\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupBinary\"), ele.byId(\"sectionBinary\"), true);\n\n    gui.maintabPanel.show(true);\n}\n\nfunction readableSize(n)\n{\n    if (n > 1024) return Math.round(n / 1024) + \" kb\";\n    if (n > 1024 * 500) return Math.round(n / 1024) + \" mb\";\n    else return n + \" bytes\";\n}\n","inc_skin_js":"const GltfSkin = class\n{\n    constructor(node)\n    {\n        this._mod = null;\n        this._node = node;\n        this._lastTime = 0;\n        this._matArr = [];\n        this._m = mat4.create();\n        this._invBindMatrix = mat4.create();\n        this.identity = true;\n    }\n\n    renderFinish(cgl)\n    {\n        cgl.popModelMatrix();\n        this._mod.unbind();\n    }\n\n    renderStart(cgl, time)\n    {\n        if (!this._mod)\n        {\n            this._mod = new CGL.ShaderModifier(cgl, op.name + this._node.name);\n\n            this._mod.addModule({\n                \"priority\": -2,\n                \"name\": \"MODULE_VERTEX_POSITION\",\n                \"srcHeadVert\": attachments.skin_head_vert || \"\",\n                \"srcBodyVert\": attachments.skin_vert || \"\"\n            });\n\n            this._mod.addUniformVert(\"m4[]\", \"MOD_boneMats\", []);// bohnenmatze\n            const tr = vec3.create();\n        }\n\n        const skinIdx = this._node.skin;\n        const arrLength = gltf.json.skins[skinIdx].joints.length * 16;\n\n        // if (this._lastTime != time || !time)\n        {\n            // this._lastTime=inTime.get();\n            if (this._matArr.length != arrLength) this._matArr.length = arrLength;\n\n            for (let i = 0; i < gltf.json.skins[skinIdx].joints.length; i++)\n            {\n                const i16 = i * 16;\n                const jointIdx = gltf.json.skins[skinIdx].joints[i];\n                const nodeJoint = gltf.nodes[jointIdx];\n\n                for (let j = 0; j < 16; j++)\n                    this._invBindMatrix[j] = gltf.accBuffers[gltf.json.skins[skinIdx].inverseBindMatrices][i16 + j];\n\n                mat4.mul(this._m, nodeJoint.modelMatAbs(), this._invBindMatrix);\n\n                for (let j = 0; j < this._m.length; j++) this._matArr[i16 + j] = this._m[j];\n            }\n\n            this._mod.setUniformValue(\"MOD_boneMats\", this._matArr);\n            this._lastTime = time;\n        }\n\n        this._mod.define(\"SKIN_NUM_BONES\", gltf.json.skins[skinIdx].joints.length);\n        this._mod.bind();\n\n        // draw mesh...\n        cgl.pushModelMatrix();\n        if (this.identity)mat4.identity(cgl.mMatrix);\n    }\n};\n","skin_vert":"int index=int(attrJoints.x);\nvec4 newPos = (MOD_boneMats[index] * pos) * attrWeights.x;\nvec3 newNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.x).xyz);\n\nindex=int(attrJoints.y);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.y;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.y).xyz)+newNorm;\n\nindex=int(attrJoints.z);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.z;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.z).xyz)+newNorm;\n\nindex=int(attrJoints.w);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.w ;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.w).xyz)+newNorm;\n\npos=newPos;\n\nnorm=normalize(newNorm.xyz);\n\n\n","skin_head_vert":"\nIN vec4 attrWeights;\nIN vec4 attrJoints;\nUNI mat4 MOD_boneMats[SKIN_NUM_BONES];\n",};
+const attachments={"inc_camera_js":"const gltfCamera = class\n{\n    constructor(gltf, node)\n    {\n        this.node=node;\n        this.name=node.name;\n        // console.log(gltf);\n        this.config=gltf.json.cameras[node.camera];\n\n        this.pos = vec3.create();\n        this.quat = quat.create();\n        this.quatOr = quat.create();\n        this.vCenter = vec3.create();\n        this.vUp = vec3.create();\n        this.vMat = mat4.create();\n\n    }\n\n    updateAnim(time)\n    {\n        if (this.node && this.node._animTrans)\n        {\n\n            vec3.set(this.pos,\n                this.node._animTrans[0].getValue(time),\n                this.node._animTrans[1].getValue(time),\n                this.node._animTrans[2].getValue(time));\n\n            quat.set(this.quat,\n                this.node._animRot[0].getValue(time),\n                this.node._animRot[1].getValue(time),\n                this.node._animRot[2].getValue(time),\n                this.node._animRot[3].getValue(time));\n        }\n    }\n\n    start(time)\n    {\n        if (cgl.frameStore.shadowPass) return;\n\n        this.updateAnim(time);\n        const asp = cgl.getViewPort()[2] / cgl.getViewPort()[3];\n\n        cgl.pushPMatrix();\n        // mat4.perspective(\n        //     cgl.pMatrix,\n        //     this.config.perspective.yfov*0.5,\n        //     asp,\n        //     this.config.perspective.znear,\n        //     this.config.perspective.zfar);\n\n        cgl.pushViewMatrix();\n        // mat4.identity(cgl.vMatrix);\n\n        // if(this.node && this.node.parent)\n        // {\n        //     console.log(this.node.parent)\n            // vec3.add(this.pos,this.pos,this.node.parent._node.translation);\n            // vec3.sub(this.vCenter,this.vCenter,this.node.parent._node.translation);\n            // mat4.translate(cgl.vMatrix,cgl.vMatrix,\n            // [\n            //     -this.node.parent._node.translation[0],\n            //     -this.node.parent._node.translation[1],\n            //     -this.node.parent._node.translation[2]\n            // ])\n        // }\n\n\n\n        // vec3.set(this.vUp, 0, 1, 0);\n        // vec3.set(this.vCenter, 0, -1, 0);\n        // // vec3.set(this.vCenter, 0, 1, 0);\n        // vec3.transformQuat(this.vCenter, this.vCenter, this.quat);\n        // vec3.normalize(this.vCenter, this.vCenter);\n        // vec3.add(this.vCenter, this.vCenter, this.pos);\n\n\n        // mat4.lookAt(cgl.vMatrix, this.pos, this.vCenter, this.vUp);\n\n\n        let mv=mat4.create();\n        mat4.invert(mv,this.node.modelMatAbs());\n\n        // console.log(this.node.modelMatAbs());\n\n        this.vMat=mv;\n\n        mat4.identity(cgl.vMatrix);\n        // console.log(mv);\n        mat4.mul(cgl.vMatrix,cgl.vMatrix,mv);\n\n\n    }\n\n    end()\n    {\n        if (cgl.frameStore.shadowPass) return;\n        cgl.popPMatrix();\n        cgl.popViewMatrix();\n    }\n};\n\n","inc_gltf_js":"const CHUNK_HEADER_SIZE = 8;\n\nconst Gltf = class\n{\n    constructor()\n    {\n        this.json = {};\n        this.accBuffers = [];\n        this.meshes = [];\n        this.nodes = [];\n        this.shaders = [];\n        this.timing = [];\n        this.cams = [];\n        this.startTime = performance.now();\n        this.bounds = new CABLES.CG.BoundingBox();\n        this.loaded = Date.now();\n        this.accBuffersDelete = [];\n    }\n\n    getNode(n)\n    {\n        for (let i = 0; i < this.nodes.length; i++)\n        {\n            if (this.nodes[i].name == n) return this.nodes[i];\n        }\n    }\n\n    unHideAll()\n    {\n        for (let i = 0; i < this.nodes.length; i++)\n        {\n            this.nodes[i].unHide();\n        }\n    }\n};\n\nfunction Utf8ArrayToStr(array)\n{\n    if (window.TextDecoder) return new TextDecoder(\"utf-8\").decode(array);\n\n    let out, i, len, c;\n    let char2, char3;\n\n    out = \"\";\n    len = array.length;\n    i = 0;\n    while (i < len)\n    {\n        c = array[i++];\n        switch (c >> 4)\n        {\n        case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:\n            // 0xxxxxxx\n            out += String.fromCharCode(c);\n            break;\n        case 12: case 13:\n            // 110x xxxx   10xx xxxx\n            char2 = array[i++];\n            out += String.fromCharCode(((c & 0x1F) << 6) | (char2 & 0x3F));\n            break;\n        case 14:\n            // 1110 xxxx  10xx xxxx  10xx xxxx\n            char2 = array[i++];\n            char3 = array[i++];\n            out += String.fromCharCode(((c & 0x0F) << 12) |\n                    ((char2 & 0x3F) << 6) |\n                    ((char3 & 0x3F) << 0));\n            break;\n        }\n    }\n\n    return out;\n}\n\nfunction readChunk(dv, bArr, arrayBuffer, offset)\n{\n    const chunk = {};\n\n    if (offset >= dv.byteLength)\n    {\n        op.log(\"could not read chunk...\");\n        return;\n    }\n    chunk.size = dv.getUint32(offset + 0, le);\n\n    // chunk.type = new TextDecoder(\"utf-8\").decode(bArr.subarray(offset+4, offset+4+4));\n    chunk.type = Utf8ArrayToStr(bArr.subarray(offset + 4, offset + 4 + 4));\n\n    if (chunk.type == \"BIN\\0\")\n    {\n        // console.log(chunk.size,arrayBuffer.length,offset);\n        // try\n        // {\n        chunk.dataView = new DataView(arrayBuffer, offset + 8, chunk.size);\n        // }\n        // catch(e)\n        // {\n        //     chunk.dataView = null;\n        //     console.log(e);\n        // }\n    }\n    else\n    if (chunk.type == \"JSON\")\n    {\n        const json = Utf8ArrayToStr(bArr.subarray(offset + 8, offset + 8 + chunk.size));\n\n        try\n        {\n            const obj = JSON.parse(json);\n            chunk.data = obj;\n            outGenerator.set(obj.asset.generator);\n        }\n        catch (e)\n        {\n        }\n    }\n    else\n    {\n        op.warn(\"unknown type\", chunk.type);\n    }\n\n    return chunk;\n}\n\nfunction loadAnims(gltf)\n{\n    const uniqueAnimNames = {};\n\n    for (let i = 0; i < gltf.json.animations.length; i++)\n    {\n        const an = gltf.json.animations[i];\n\n        for (let ia = 0; ia < an.channels.length; ia++)\n        {\n            const chan = an.channels[ia];\n\n            const node = gltf.nodes[chan.target.node];\n            const sampler = an.samplers[chan.sampler];\n\n            const acc = gltf.json.accessors[sampler.input];\n            const bufferIn = gltf.accBuffers[sampler.input];\n\n            const accOut = gltf.json.accessors[sampler.output];\n            const bufferOut = gltf.accBuffers[sampler.output];\n\n            gltf.accBuffersDelete.push(sampler.output, sampler.input);\n\n            if (bufferIn && bufferOut)\n            {\n                let numComps = 1;\n                if (accOut.type == \"VEC2\")numComps = 2;\n                else if (accOut.type == \"VEC3\")numComps = 3;\n                else if (accOut.type == \"VEC4\")numComps = 4;\n                else op.warn(\"unknown accOut.type\", accOut.type);\n\n                const anims = [];\n\n                uniqueAnimNames[an.name] = true;\n\n                for (let k = 0; k < numComps; k++)\n                {\n                    const newAnim = new CABLES.TL.Anim();\n                    // newAnim.name=an.name;\n                    anims.push(newAnim);\n                }\n\n                if (sampler.interpolation == \"LINEAR\") {}\n                else if (sampler.interpolation == \"STEP\") for (let k = 0; k < numComps; k++) anims[k].defaultEasing = CABLES.EASING_ABSOLUTE;\n                else if (sampler.interpolation == \"CUBICSPLINE\") for (let k = 0; k < numComps; k++) anims[k].defaultEasing = CABLES.EASING_CUBICSPLINE;\n                else op.warn(\"unknown interpolation\", sampler.interpolation);\n\n                // console.log(bufferOut)\n\n                // if there is no keyframe for time 0 copy value of first keyframe at time 0\n                if (bufferIn[0] !== 0.0)\n                    for (let k = 0; k < numComps; k++)\n                        anims[k].setValue(0, bufferOut[0 * numComps + k]);\n\n                // console.log(sampler.interpolation,bufferOut.length/numComps)\n\n                for (let j = 0; j < bufferIn.length; j++)\n                {\n                    maxTime = Math.max(bufferIn[j], maxTime);\n\n                    for (let k = 0; k < numComps; k++)\n                    {\n                        if (anims[k].defaultEasing === CABLES.EASING_CUBICSPLINE)\n                        {\n                            const idx = ((j * numComps) * 3 + k);\n\n                            const key = anims[k].setValue(bufferIn[j], bufferOut[idx + numComps]);\n                            key.bezTangIn = bufferOut[idx];\n                            key.bezTangOut = bufferOut[idx + (numComps * 2)];\n\n                            // console.log(an.name,k,bufferOut[idx+1]);\n                        }\n                        else\n                        {\n                            // console.log(an.name,k,bufferOut[j * numComps + k]);\n                            anims[k].setValue(bufferIn[j], bufferOut[j * numComps + k]);\n                        }\n                    }\n                }\n\n                node.setAnim(chan.target.path, an.name, anims);\n            }\n            else\n            {\n                op.warn(\"loadAmins bufferIn undefined \", bufferIn === undefined);\n                op.warn(\"loadAmins bufferOut undefined \", bufferOut === undefined);\n                op.warn(\"loadAmins \", sampler, accOut);\n                op.warn(\"loadAmins num accBuffers\", gltf.accBuffers.length);\n                op.warn(\"loadAmins num accessors\", gltf.json.accessors.length);\n            }\n        }\n    }\n\n    gltf.uniqueAnimNames = uniqueAnimNames;\n\n    outAnims.set(null);\n    outAnims.set(Object.keys(uniqueAnimNames));\n}\n\nfunction loadCams(gltf)\n{\n    if (!gltf || !gltf.json.cameras) return;\n\n    gltf.cameras = gltf.cameras || [];\n\n    for (let i = 0; i < gltf.nodes.length; i++)\n    {\n        if (gltf.nodes[i].hasOwnProperty(\"camera\"))\n        {\n            const cam = new gltfCamera(gltf, gltf.nodes[i]);\n            gltf.cameras.push(cam);\n        }\n    }\n}\n\nfunction loadAfterDraco()\n{\n    if (!window.DracoDecoder)\n    {\n        setTimeout(() =>\n        {\n            loadAfterDraco();\n        }, 100);\n    }\n\n    reloadSoon();\n}\n\nfunction parseGltf(arrayBuffer)\n{\n    let j = 0, i = 0;\n\n    const gltf = new Gltf();\n    gltf.timing.push(\"Start parsing\", Math.round((performance.now() - gltf.startTime)));\n\n    if (!arrayBuffer) return;\n    const byteArray = new Uint8Array(arrayBuffer);\n    let pos = 0;\n\n    // var string = new TextDecoder(\"utf-8\").decode(byteArray.subarray(pos, 4));\n    const string = Utf8ArrayToStr(byteArray.subarray(pos, 4));\n    pos += 4;\n    if (string != \"glTF\") return;\n\n    gltf.timing.push(\"dataview\", Math.round((performance.now() - gltf.startTime)));\n\n    const dv = new DataView(arrayBuffer);\n    const version = dv.getUint32(pos, le);\n    pos += 4;\n    const size = dv.getUint32(pos, le);\n    pos += 4;\n\n    outVersion.set(version);\n\n    const chunks = [];\n    gltf.chunks = chunks;\n\n    chunks.push(readChunk(dv, byteArray, arrayBuffer, pos));\n    pos += chunks[0].size + CHUNK_HEADER_SIZE;\n    gltf.json = chunks[0].data;\n    outJson.set(gltf.json);\n    outExtensions.set(gltf.json.extensionsUsed || []);\n\n    let ch = readChunk(dv, byteArray, arrayBuffer, pos);\n    while (ch)\n    {\n        chunks.push(ch);\n        pos += ch.size + CHUNK_HEADER_SIZE;\n        ch = readChunk(dv, byteArray, arrayBuffer, pos);\n    }\n\n    gltf.chunks = chunks;\n\n    const views = chunks[0].data.bufferViews;\n    const accessors = chunks[0].data.accessors;\n\n    gltf.timing.push(\"Parse buffers\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.extensionsUsed && gltf.json.extensionsUsed.indexOf(\"KHR_draco_mesh_compression\") > -1)\n    {\n        if (!window.DracoDecoder)\n        {\n            op.setUiError(\"gltfdraco\", \"GLTF draco compression lib not found / add draco op to your patch!\");\n\n            loadAfterDraco();\n            return gltf;\n        }\n        else\n        {\n            gltf.useDraco = true;\n        }\n    }\n\n    op.setUiError(\"gltfdraco\", null);\n    // let accPos = (view.byteOffset || 0) + (acc.byteOffset || 0);\n\n    if (views)\n    {\n        for (i = 0; i < accessors.length; i++)\n        {\n            const acc = accessors[i];\n            const view = views[acc.bufferView];\n\n            let numComps = 0;\n            if (acc.type == \"SCALAR\")numComps = 1;\n            else if (acc.type == \"VEC2\")numComps = 2;\n            else if (acc.type == \"VEC3\")numComps = 3;\n            else if (acc.type == \"VEC4\")numComps = 4;\n            else if (acc.type == \"MAT4\")numComps = 16;\n            else console.error(\"unknown accessor type\", acc.type);\n\n            //   const decoder = new decoderModule.Decoder();\n            //   const decodedGeometry = decodeDracoData(data, decoder);\n            //   // Encode mesh\n            //   encodeMeshToFile(decodedGeometry, decoder);\n\n            //   decoderModule.destroy(decoder);\n            //   decoderModule.destroy(decodedGeometry);\n\n            // 5120 (BYTE)\t1\n            // 5121 (UNSIGNED_BYTE)\t1\n            // 5122 (SHORT)\t2\n\n            if (chunks[1].dataView)\n            {\n                if (view)\n                {\n                    const num = acc.count * numComps;\n                    let accPos = (view.byteOffset || 0) + (acc.byteOffset || 0);\n                    let stride = view.byteStride || 0;\n                    let dataBuff = null;\n\n                    if (acc.componentType == 5126 || acc.componentType == 5125) // 4byte FLOAT or INT\n                    {\n                        stride = stride || 4;\n\n                        const isInt = acc.componentType == 5125;\n                        if (isInt)dataBuff = new Uint32Array(num);\n                        else dataBuff = new Float32Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            if (isInt) dataBuff[j] = chunks[1].dataView.getUint32(accPos, le);\n                            else dataBuff[j] = chunks[1].dataView.getFloat32(accPos, le);\n\n                            if (stride != 4 && (j + 1) % numComps === 0)accPos += stride - (numComps * 4);\n                            accPos += 4;\n                        }\n                    }\n                    else if (acc.componentType == 5123) // UNSIGNED_SHORT\n                    {\n                        stride = stride || 2;\n\n                        dataBuff = new Uint16Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            dataBuff[j] = chunks[1].dataView.getUint16(accPos, le);\n\n                            if (stride != 2 && (j + 1) % numComps === 0) accPos += stride - (numComps * 2);\n\n                            accPos += 2;\n                        }\n                    }\n                    else if (acc.componentType == 5121) // UNSIGNED_BYTE\n                    {\n                        stride = stride || 1;\n\n                        dataBuff = new Uint8Array(num);\n\n                        for (j = 0; j < num; j++)\n                        {\n                            dataBuff[j] = chunks[1].dataView.getUint8(accPos, le);\n\n                            if (stride != 1 && (j + 1) % numComps === 0) accPos += stride - (numComps * 1);\n\n                            accPos += 1;\n                        }\n                    }\n\n                    else\n                    {\n                        console.error(\"unknown component type\", acc.componentType);\n                    }\n\n                    gltf.accBuffers.push(dataBuff);\n                }\n                else\n                {\n                    // console.log(\"has no dataview\");\n                }\n            }\n        }\n    }\n\n    gltf.timing.push(\"Parse mesh groups\", Math.round((performance.now() - gltf.startTime)));\n\n    gltf.json.meshes = gltf.json.meshes || [];\n\n    if (gltf.json.meshes)\n    {\n        for (i = 0; i < gltf.json.meshes.length; i++)\n        {\n            const mesh = new gltfMeshGroup(gltf, gltf.json.meshes[i]);\n            gltf.meshes.push(mesh);\n        }\n    }\n\n    gltf.timing.push(\"Parse nodes\", Math.round((performance.now() - gltf.startTime)));\n\n    for (i = 0; i < gltf.json.nodes.length; i++)\n    {\n        if (gltf.json.nodes[i].children)\n            for (j = 0; j < gltf.json.nodes[i].children.length; j++)\n            {\n                gltf.json.nodes[gltf.json.nodes[i].children[j]].isChild = true;\n            }\n    }\n\n    for (i = 0; i < gltf.json.nodes.length; i++)\n    {\n        const node = new gltfNode(gltf.json.nodes[i], gltf);\n        gltf.nodes.push(node);\n    }\n\n    for (i = 0; i < gltf.nodes.length; i++)\n    {\n        const node = gltf.nodes[i];\n\n        if (!node.children) continue;\n        for (let j = 0; j < node.children.length; j++)\n        {\n            gltf.nodes[node.children[j]].parent = node;\n        }\n    }\n\n    for (i = 0; i < gltf.nodes.length; i++)\n    {\n        gltf.nodes[i].initSkin();\n    }\n\n    needsMatUpdate = true;\n\n    gltf.timing.push(\"load anims\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.animations) loadAnims(gltf);\n\n    gltf.timing.push(\"load cameras\", Math.round((performance.now() - gltf.startTime)));\n\n    if (gltf.json.cameras) loadCams(gltf);\n\n    gltf.timing.push(\"finished\", Math.round((performance.now() - gltf.startTime)));\n\n    return gltf;\n}\n","inc_mesh_js":"let gltfMesh = class\n{\n    constructor(name, prim, gltf, finished)\n    {\n        this.POINTS = 0;\n        this.LINES = 1;\n        this.LINE_LOOP = 2;\n        this.LINE_STRIP = 3;\n        this.TRIANGLES = 4;\n        this.TRIANGLE_STRIP = 5;\n        this.TRIANGLE_FAN = 6;\n\n        this.test = 0;\n        this.name = name;\n        this.submeshIndex = 0;\n        this.material = prim.material;\n        this.mesh = null;\n        this.geom = new CGL.Geometry(\"gltf_\" + this.name);\n        this.geom.verticesIndices = [];\n        this.bounds = null;\n        this.primitive = 4;\n        if (prim.hasOwnProperty(\"mode\")) this.primitive = prim.mode;\n\n        if (prim.hasOwnProperty(\"indices\")) this.geom.verticesIndices = gltf.accBuffers[prim.indices];\n\n        gltf.loadingMeshes = gltf.loadingMeshes || 0;\n        gltf.loadingMeshes++;\n\n        this.materialJson =\n            this._matPbrMetalness =\n            this._matPbrRoughness =\n            this._matDiffuseColor = null;\n\n        if (gltf.json.materials)\n        {\n            if (this.material != -1) this.materialJson = gltf.json.materials[this.material];\n\n            if (this.materialJson && this.materialJson.pbrMetallicRoughness)\n            {\n                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty(\"baseColorFactor\"))\n                {\n                    this._matDiffuseColor = [1, 1, 1, 1];\n                }\n                else\n                {\n                    this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;\n                }\n\n                this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;\n\n                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty(\"metallicFactor\"))\n                {\n                    this._matPbrMetalness = 1.0;\n                }\n                else\n                {\n                    this._matPbrMetalness = this.materialJson.pbrMetallicRoughness.metallicFactor || null;\n                }\n\n                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty(\"roughnessFactor\"))\n                {\n                    this._matPbrRoughness = 1.0;\n                }\n                else\n                {\n                    this._matPbrRoughness = this.materialJson.pbrMetallicRoughness.roughnessFactor || null;\n                }\n            }\n        }\n\n        if (gltf.useDraco && prim.extensions.KHR_draco_mesh_compression)\n        {\n            const view = gltf.chunks[0].data.bufferViews[prim.extensions.KHR_draco_mesh_compression.bufferView];\n            const num = view.byteLength;\n            const dataBuff = new Int8Array(num);\n            let accPos = (view.byteOffset || 0);// + (acc.byteOffset || 0);\n            for (let j = 0; j < num; j++)\n            {\n                dataBuff[j] = gltf.chunks[1].dataView.getInt8(accPos, le);\n                accPos++;\n            }\n\n            const dracoDecoder = window.DracoDecoder;\n            dracoDecoder.decodeGeometry(dataBuff.buffer, (geometry) =>\n            {\n                const geom = new CGL.Geometry(\"draco mesh \" + name);\n\n                for (let i = 0; i < geometry.attributes.length; i++)\n                {\n                    const attr = geometry.attributes[i];\n\n                    if (attr.name === \"position\") geom.vertices = attr.array;\n                    else if (attr.name === \"normal\") geom.vertexNormals = attr.array;\n                    else if (attr.name === \"uv\") geom.texCoords = attr.array;\n                    else if (attr.name === \"color\") geom.vertexColors = this.calcVertexColors(attr.array);\n                    else if (attr.name === \"joints\") geom.setAttribute(\"attrJoints\", Array.from(attr.array), 4);\n                    else if (attr.name === \"weights\")\n                    {\n                        const arr4 = new Float32Array(attr.array.length / attr.itemSize * 4);\n\n                        for (let k = 0; k < attr.array.length / attr.itemSize; k++)\n                        {\n                            arr4[k * 4] = arr4[k * 4 + 1] = arr4[k * 4 + 2] = arr4[k * 4 + 3] = 0;\n                            for (let j = 0; j < attr.itemSize; j++)\n                                arr4[k * 4 + j] = attr.array[k * attr.itemSize + j];\n                        }\n                        geom.setAttribute(\"attrWeights\", arr4, 4);\n                    }\n                    else op.logWarn(\"unknown draco attrib\", attr);\n                }\n\n                geometry.attributes = null;\n                geom.verticesIndices = geometry.index.array;\n\n                this.setGeom(geom);\n\n                this.mesh = null;\n                gltf.loadingMeshes--;\n                if (finished)finished(this);\n            }, (error) => { op.logError(error); });\n        }\n        else\n        {\n            gltf.loadingMeshes--;\n            this.fillGeomAttribs(gltf, this.geom, prim.attributes);\n\n            if (prim.targets)\n            {\n                console.log(\"prim.targets\", prim.targets.length);\n                for (let j = 0; j < prim.targets.length; j++)\n                {\n                    // var tgeom=new CGL.Geometry(\"gltf_\"+this.name);\n                    let tgeom = this.geom.copy();\n\n                    if (prim.hasOwnProperty(\"indices\")) tgeom.verticesIndices = gltf.accBuffers[prim.indices];\n\n                    this.fillGeomAttribs(gltf, tgeom, prim.targets[j], false);\n\n                    { // calculate normals for final position of morphtarget for later...\n                        for (let i = 0; i < tgeom.vertices.length; i++) tgeom.vertices[i] += this.geom.vertices[i];\n                        tgeom.calculateNormals();\n                        for (let i = 0; i < tgeom.vertices.length; i++) tgeom.vertices[i] -= this.geom.vertices[i];\n                    }\n\n                    this.geom.morphTargets.push(tgeom);\n                }\n            }\n            if (finished)finished(this);\n        }\n    }\n\n    _linearToSrgb(x)\n    {\n        if (x <= 0)\n            return 0;\n        else if (x >= 1)\n            return 1;\n        else if (x < 0.0031308)\n            return x * 12.92;\n        else\n            return Math.pow(x, 1 / 2.2) * 1.055 - 0.055;\n    }\n\n    calcVertexColors(arr)\n    {\n        let vertexColors = null;\n        if (arr instanceof Float32Array)\n        {\n            let div = false;\n            for (let i = 0; i < arr.length; i++)\n            {\n                if (arr[i] > 1)\n                {\n                    div = true;\n                    continue;\n                }\n            }\n\n            if (div)\n                for (let i = 0; i < arr.length; i++) arr[i] /= 65535;\n\n            vertexColors = arr;\n        }\n\n        else if (arr instanceof Uint16Array)\n        {\n            const fb = new Float32Array(arr.length);\n            for (let i = 0; i < arr.length; i++) fb[i] = arr[i] / 65535;\n\n            vertexColors = fb;\n        }\n        else vertexColors = arr;\n\n        for (let i = 0; i < vertexColors.length; i++)\n        {\n            vertexColors[i] = this._linearToSrgb(vertexColors[i]);\n        }\n\n        return vertexColors;\n    }\n\n    fillGeomAttribs(gltf, tgeom, attribs, setGeom)\n    {\n        if (attribs.hasOwnProperty(\"POSITION\")) tgeom.vertices = gltf.accBuffers[attribs.POSITION];\n        if (attribs.hasOwnProperty(\"NORMAL\")) tgeom.vertexNormals = gltf.accBuffers[attribs.NORMAL];\n        if (attribs.hasOwnProperty(\"TANGENT\")) tgeom.tangents = gltf.accBuffers[attribs.TANGENT];\n\n        if (attribs.hasOwnProperty(\"COLOR_0\")) tgeom.vertexColors = this.calcVertexColors(gltf.accBuffers[attribs.COLOR_0]);\n        if (attribs.hasOwnProperty(\"COLOR_1\")) tgeom.setAttribute(\"attrVertColor1\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_1]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_2\")) tgeom.setAttribute(\"attrVertColor2\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_2]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_3\")) tgeom.setAttribute(\"attrVertColor3\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_3]), 4);\n        if (attribs.hasOwnProperty(\"COLOR_4\")) tgeom.setAttribute(\"attrVertColor4\", this.calcVertexColors(gltf.accBuffers[attribs.COLOR_4]), 4);\n\n        if (attribs.hasOwnProperty(\"TEXCOORD_0\"))tgeom.texCoords = gltf.accBuffers[attribs.TEXCOORD_0];\n        if (attribs.hasOwnProperty(\"TEXCOORD_1\"))tgeom.setAttribute(\"attrTexCoord1\", gltf.accBuffers[attribs.TEXCOORD_1], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_2\"))tgeom.setAttribute(\"attrTexCoord2\", gltf.accBuffers[attribs.TEXCOORD_2], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_3\"))tgeom.setAttribute(\"attrTexCoord3\", gltf.accBuffers[attribs.TEXCOORD_3], 2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_4\"))tgeom.setAttribute(\"attrTexCoord4\", gltf.accBuffers[attribs.TEXCOORD_4], 2);\n\n        if (attribs.hasOwnProperty(\"WEIGHTS_0\"))\n        {\n            tgeom.setAttribute(\"attrWeights\", gltf.accBuffers[attribs.WEIGHTS_0], 4);\n        }\n        if (attribs.hasOwnProperty(\"JOINTS_0\"))\n        {\n            if (!gltf.accBuffers[attribs.JOINTS_0])console.log(\"no !gltf.accBuffers[attribs.JOINTS_0]\");\n            tgeom.setAttribute(\"attrJoints\", gltf.accBuffers[attribs.JOINTS_0], 4);\n        }\n\n        if (attribs.hasOwnProperty(\"POSITION\")) gltf.accBuffersDelete.push(attribs.POSITION);\n        if (attribs.hasOwnProperty(\"NORMAL\")) gltf.accBuffersDelete.push(attribs.NORMAL);\n        if (attribs.hasOwnProperty(\"TEXCOORD_0\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_0);\n        if (attribs.hasOwnProperty(\"TANGENT\")) gltf.accBuffersDelete.push(attribs.TANGENT);\n        if (attribs.hasOwnProperty(\"COLOR_0\"))gltf.accBuffersDelete.push(attribs.COLOR_0);\n        if (attribs.hasOwnProperty(\"COLOR_0\"))gltf.accBuffersDelete.push(attribs.COLOR_0);\n        if (attribs.hasOwnProperty(\"COLOR_1\"))gltf.accBuffersDelete.push(attribs.COLOR_1);\n        if (attribs.hasOwnProperty(\"COLOR_2\"))gltf.accBuffersDelete.push(attribs.COLOR_2);\n        if (attribs.hasOwnProperty(\"COLOR_3\"))gltf.accBuffersDelete.push(attribs.COLOR_3);\n\n        if (attribs.hasOwnProperty(\"TEXCOORD_1\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_1);\n        if (attribs.hasOwnProperty(\"TEXCOORD_2\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_2);\n        if (attribs.hasOwnProperty(\"TEXCOORD_3\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_3);\n        if (attribs.hasOwnProperty(\"TEXCOORD_4\")) gltf.accBuffersDelete.push(attribs.TEXCOORD_4);\n\n        if (setGeom !== false) if (tgeom && tgeom.verticesIndices) this.setGeom(tgeom);\n    }\n\n    setGeom(geom)\n    {\n        if (inNormFormat.get() == \"X-ZY\")\n        {\n            for (let i = 0; i < geom.vertexNormals.length; i += 3)\n            {\n                let t = geom.vertexNormals[i + 2];\n                geom.vertexNormals[i + 2] = geom.vertexNormals[i + 1];\n                geom.vertexNormals[i + 1] = -t;\n            }\n        }\n\n        if (inVertFormat.get() == \"XZ-Y\")\n        {\n            for (let i = 0; i < geom.vertices.length; i += 3)\n            {\n                let t = geom.vertices[i + 2];\n                geom.vertices[i + 2] = -geom.vertices[i + 1];\n                geom.vertices[i + 1] = t;\n            }\n        }\n\n        if (this.primitive == this.TRIANGLES)\n        {\n            if (!geom.vertexNormals.length || inCalcNormals.get()) geom.calculateNormals();\n\n            if ((!geom.biTangents || geom.biTangents.length == 0) && geom.tangents)\n            {\n                const bitan = vec3.create();\n                const tan = vec3.create();\n\n                const tangents = geom.tangents;\n                geom.tangents = new Float32Array(tangents.length / 4 * 3);\n                geom.biTangents = new Float32Array(tangents.length / 4 * 3);\n\n                for (let i = 0; i < tangents.length; i += 4)\n                {\n                    const idx = i / 4 * 3;\n\n                    vec3.cross(\n                        bitan,\n                        [geom.vertexNormals[idx], geom.vertexNormals[idx + 1], geom.vertexNormals[idx + 2]],\n                        [tangents[i], tangents[i + 1], tangents[i + 2]]\n                    );\n\n                    vec3.div(bitan, bitan, [tangents[i + 3], tangents[i + 3], tangents[i + 3]]);\n                    vec3.normalize(bitan, bitan);\n\n                    geom.biTangents[idx + 0] = bitan[0];\n                    geom.biTangents[idx + 1] = bitan[1];\n                    geom.biTangents[idx + 2] = bitan[2];\n\n                    geom.tangents[idx + 0] = tangents[i + 0];\n                    geom.tangents[idx + 1] = tangents[i + 1];\n                    geom.tangents[idx + 2] = tangents[i + 2];\n                }\n            }\n\n            if (geom.tangents.length === 0 || inCalcNormals.get()) geom.calcTangentsBitangents();\n        }\n\n        this.geom = geom;\n\n        this.bounds = geom.getBounds();\n    }\n\n    render(cgl, ignoreMaterial, skinRenderer)\n    {\n        if (!this.mesh && this.geom && this.geom.verticesIndices)\n        {\n            let g = this.geom;\n            if (this.geom.vertices.length / 3 > 64000)\n            {\n                g = this.geom.copy();\n                g.unIndex(false, true);\n            }\n\n            let glprim;\n            if (this.primitive == this.TRIANGLES)glprim = cgl.gl.TRIANGLES;\n            else if (this.primitive == this.LINES)glprim = cgl.gl.LINES;\n            else if (this.primitive == this.LINE_STRIP)glprim = cgl.gl.LINE_STRIP;\n            else if (this.primitive == this.POINTS)glprim = cgl.gl.POINTS;\n            else\n            {\n                op.logWarn(\"unknown primitive type\", this);\n            }\n\n            this.mesh = new CGL.Mesh(cgl, g, glprim);\n            // this.mesh._geom = null;\n        }\n        else\n        {\n            // update morphTargets\n            if (this.geom && this.geom.morphTargets.length)\n            {\n                this.morphGeom = this.geom.copy();\n\n                this.test = time * 11.7;\n\n                if (this.test >= this.geom.morphTargets.length - 1) this.test = 0;\n\n                const mt = this.geom.morphTargets[Math.floor(this.test)];\n                const mt2 = this.geom.morphTargets[Math.floor(this.test + 1)];\n\n                if (mt && mt.vertices && mt2)\n                {\n                    if (this.morphGeom.vertexNormals.length != mt.vertexNormals.length)\n                        this.morphGeom.vertexNormals = new Float32Array(mt.vertexNormals.length);\n\n                    const fract = this.test % 1;\n                    for (let i = 0; i < this.morphGeom.vertices.length; i++)\n                    {\n                        this.morphGeom.vertices[i] =\n                            this.geom.vertices[i] +\n                            (1.0 - fract) * mt.vertices[i] +\n                            fract * mt2.vertices[i];\n\n                        this.morphGeom.vertexNormals[i] =\n                            (1.0 - fract) * mt.vertexNormals[i] +\n                            fract * mt2.vertexNormals[i];\n                    }\n\n                    this.mesh.updateNormals(this.morphGeom);\n                    this.mesh.updateVertices(this.morphGeom);\n                }\n            }\n\n            let useMat = !ignoreMaterial && this.material != -1 && gltf.shaders[this.material];\n            if (skinRenderer)useMat = false;\n\n            if (useMat) cgl.pushShader(gltf.shaders[this.material]);\n\n            const currentShader = cgl.getShader() || {};\n            const uniDiff = currentShader.uniformColorDiffuse;\n\n            const uniPbrMetalness = currentShader.uniformPbrMetalness;\n            const uniPbrRoughness = currentShader.uniformPbrRoughness;\n\n            if (!gltf.shaders[this.material] && inUseMatProps.get())\n            {\n                if (uniDiff && this._matDiffuseColor)\n                {\n                    this._matDiffuseColorOrig = [uniDiff.getValue()[0], uniDiff.getValue()[1], uniDiff.getValue()[2], uniDiff.getValue()[3]];\n                    uniDiff.setValue(this._matDiffuseColor);\n                }\n\n                if (uniPbrMetalness)\n                    if (this._matPbrMetalness != null)\n                    {\n                        this._matPbrMetalnessOrig = uniPbrMetalness.getValue();\n                        uniPbrMetalness.setValue(this._matPbrMetalness);\n                    }\n                    else\n                        uniPbrMetalness.setValue(0);\n\n                if (uniPbrRoughness)\n                    if (this._matPbrRoughness != null)\n                    {\n                        this._matPbrRoughnessOrig = uniPbrRoughness.getValue();\n                        uniPbrRoughness.setValue(this._matPbrRoughness);\n                    }\n                    else\n                    {\n                        uniPbrRoughness.setValue(0);\n                    }\n            }\n\n            if (this.mesh) this.mesh.render(cgl.getShader(), ignoreMaterial);\n\n            if (inUseMatProps.get())\n            {\n                if (uniDiff && this._matDiffuseColor) uniDiff.setValue(this._matDiffuseColorOrig);\n                if (uniPbrMetalness && this._matPbrMetalnessOrig != undefined) uniPbrMetalness.setValue(this._matPbrMetalnessOrig);\n                if (uniPbrRoughness && this._matPbrRoughnessOrig != undefined) uniPbrRoughness.setValue(this._matPbrRoughnessOrig);\n            }\n\n            if (useMat) cgl.popShader();\n        }\n    }\n};\n","inc_meshGroup_js":"const gltfMeshGroup = class\n{\n    constructor(gltf, m)\n    {\n        this.bounds = new CABLES.CG.BoundingBox();\n        this.meshes = [];\n        this.name = m.name;\n        const prims = m.primitives;\n\n        for (let i = 0; i < prims.length; i++)\n        {\n            const mesh = new gltfMesh(this.name, prims[i], gltf,\n                (mesh) =>\n                {\n                    this.bounds.apply(mesh.bounds);\n                });\n\n            mesh.submeshIndex = i;\n            this.meshes.push(mesh);\n        }\n    }\n\n    render(cgl, ignoreMat, skinRenderer, _time)\n    {\n        for (let i = 0; i < this.meshes.length; i++)\n        {\n            const useMat = gltf.shaders[this.meshes[i].material];\n\n            if (!ignoreMat && useMat) cgl.pushShader(gltf.shaders[this.meshes[i].material]);\n            // console.log(gltf.shaders[this.meshes[i].material],this.meshes[i].material)\n            if (skinRenderer)skinRenderer.renderStart(cgl, _time);\n\n            this.meshes[i].render(cgl, ignoreMat, skinRenderer, _time);\n            if (skinRenderer)skinRenderer.renderFinish(cgl);\n            if (!ignoreMat && useMat) cgl.popShader();\n        }\n    }\n};\n","inc_node_js":"const gltfNode = class\n{\n    constructor(node, gltf)\n    {\n        this.isChild = node.isChild || false;\n        this.name = node.name;\n        if (node.hasOwnProperty(\"camera\")) this.camera = node.camera;\n        this.hidden = false;\n        this.mat = mat4.create();\n        this._animMat = mat4.create();\n        this._tempMat = mat4.create();\n        this._tempQuat = quat.create();\n        this._tempRotmat = mat4.create();\n        this.mesh = null;\n        this.children = [];\n        this._node = node;\n        this._gltf = gltf;\n        this.absMat = mat4.create();\n        this.addTranslate = null;\n        this._tempAnimScale = null;\n        this.addMulMat = null;\n        this.updateMatrix();\n        this._animActions = {};\n        this.skinRenderer = null;\n        this.copies = [];\n    }\n\n    get skin()\n    {\n        if (this._node.hasOwnProperty(\"skin\")) return this._node.skin;\n        else return -1;\n    }\n\n    copy()\n    {\n        this.isCopy = true;\n        const n = new gltfNode(this._node, this._gltf);\n        n.copyOf = this;\n\n        n._animActions = this._animActions;\n        n.children = this.children;\n        n.skinRenderer = new GltfSkin(n);\n\n        this.updateMatrix();\n        return n;\n    }\n\n    hasSkin()\n    {\n        if (this._node.hasOwnProperty(\"skin\")) return this._gltf.json.skins[this._node.skin].name || \"unknown\";\n        return false;\n    }\n\n    initSkin()\n    {\n        if (this.skin > -1)\n        {\n            this.skinRenderer = new GltfSkin(this);\n        }\n    }\n\n    updateMatrix()\n    {\n        mat4.identity(this.mat);\n        if (this._node.translation) mat4.translate(this.mat, this.mat, this._node.translation);\n\n        if (this._node.rotation)\n        {\n            const rotmat = mat4.create();\n            this._rot = this._node.rotation;\n\n            mat4.fromQuat(rotmat, this._node.rotation);\n            mat4.mul(this.mat, this.mat, rotmat);\n        }\n\n        if (this._node.scale)\n        {\n            this._scale = this._node.scale;\n            mat4.scale(this.mat, this.mat, this._scale);\n        }\n\n        if (this._node.hasOwnProperty(\"mesh\"))\n        {\n            this.mesh = this._gltf.meshes[this._node.mesh];\n            if (this.isCopy)\n            {\n                console.log(this.mesh);\n            }\n        }\n\n        if (this._node.children)\n        {\n            for (let i = 0; i < this._node.children.length; i++)\n            {\n                this._gltf.json.nodes[i].isChild = true;\n                if (this._gltf.nodes[this._node.children[i]]) this._gltf.nodes[this._node.children[i]].isChild = true;\n                this.children.push(this._node.children[i]);\n            }\n        }\n    }\n\n    unHide()\n    {\n        this.hidden = false;\n        for (let i = 0; i < this.children.length; i++)\n            if (this.children[i].unHide) this.children[i].unHide();\n    }\n\n    calcBounds(gltf, mat, bounds)\n    {\n        const localMat = mat4.create();\n\n        if (mat) mat4.copy(localMat, mat);\n        if (this.mat) mat4.mul(localMat, localMat, this.mat);\n\n        if (this.mesh)\n        {\n            const bb = this.mesh.bounds.copy();\n            bb.mulMat4(localMat);\n            bounds.apply(bb);\n\n            if (bounds.changed)\n            {\n                boundingPoints.push(\n                    bb._min[0] || 0, bb._min[1] || 0, bb._min[2] || 0,\n                    bb._max[0] || 0, bb._max[1] || 0, bb._max[2] || 0);\n            }\n        }\n\n        for (let i = 0; i < this.children.length; i++)\n        {\n            if (gltf.nodes[this.children[i]] && gltf.nodes[this.children[i]].calcBounds)\n            {\n                const b = gltf.nodes[this.children[i]].calcBounds(gltf, localMat, bounds);\n\n                bounds.apply(b);\n            }\n        }\n\n        if (bounds.changed) return bounds;\n        else return null;\n    }\n\n    setAnimAction(name)\n    {\n        // console.log(\"setAnimAction:\", name);\n        if (!name) return;\n\n        this._currentAnimaction = name;\n\n        if (name && !this._animActions[name])\n        {\n            // console.log(\"no action found:\", name,this._animActions);\n            return null;\n        }\n\n        // else console.log(\"YES action found:\", name);\n        // console.log(this._animActions);\n\n        for (let path in this._animActions[name])\n        {\n            if (path == \"translation\") this._animTrans = this._animActions[name][path];\n            else if (path == \"rotation\") this._animRot = this._animActions[name][path];\n            else if (path == \"scale\") this._animScale = this._animActions[name][path];\n            else console.warn(\"unknown anim path\", path, this._animActions[name][path]);\n        }\n    }\n\n    setAnim(path, name, anims)\n    {\n        if (!path || !name || !anims) return;\n\n        // console.log(\"setanim\", this._node.name, path, name, anims);\n\n        this._animActions[name] = this._animActions[name] || {};\n\n        // console.log(this._animActions);\n        // debugger;\n\n        // for (let i = 0; i < this.copies.length; i++) this.copies[i]._animActions = this._animActions;\n\n        if (this._animActions[name][path]) op.warn(\"animation action path already exists\", name, path, this._animActions[name][path]);\n\n        this._animActions[name][path] = anims;\n\n        if (path == \"translation\") this._animTrans = anims;\n        else if (path == \"rotation\") this._animRot = anims;\n        else if (path == \"scale\") this._animScale = anims;\n        else console.warn(\"unknown anim path\", path, anims);\n    }\n\n    modelMatLocal()\n    {\n        return this._animMat || this.mat;\n    }\n\n    modelMatAbs()\n    {\n        return this.absMat;\n    }\n\n    transform(cgl, _time)\n    {\n        if (!_time && _time != 0)_time = time;\n\n        this._lastTimeTrans = _time;\n\n        // console.log(this._rot)\n\n        gltfTransforms++;\n\n        if (!this._animTrans && !this._animRot && !this._animScale)\n        {\n            mat4.mul(cgl.mMatrix, cgl.mMatrix, this.mat);\n            this._animMat = null;\n        }\n        else\n        {\n            this._animMat = this._animMat || mat4.create();\n            mat4.identity(this._animMat);\n\n            const playAnims = true;\n\n            if (playAnims && this._animTrans)\n            {\n                mat4.translate(this._animMat, this._animMat, [\n                    this._animTrans[0].getValue(_time),\n                    this._animTrans[1].getValue(_time),\n                    this._animTrans[2].getValue(_time)]);\n            }\n            else\n            if (this._node.translation) mat4.translate(this._animMat, this._animMat, this._node.translation);\n\n            if (playAnims && this._animRot)\n            {\n                if (this._animRot[0].defaultEasing == CABLES.EASING_LINEAR) CABLES.TL.Anim.slerpQuaternion(_time, this._tempQuat, this._animRot[0], this._animRot[1], this._animRot[2], this._animRot[3]);\n                else if (this._animRot[0].defaultEasing == CABLES.EASING_ABSOLUTE)\n                {\n                    this._tempQuat[0] = this._animRot[0].getValue(_time);\n                    this._tempQuat[1] = this._animRot[1].getValue(_time);\n                    this._tempQuat[2] = this._animRot[2].getValue(_time);\n                    this._tempQuat[3] = this._animRot[3].getValue(_time);\n                }\n                else if (this._animRot[0].defaultEasing == CABLES.EASING_CUBICSPLINE)\n                {\n                    CABLES.TL.Anim.slerpQuaternion(_time, this._tempQuat, this._animRot[0], this._animRot[1], this._animRot[2], this._animRot[3]);\n                }\n\n                mat4.fromQuat(this._tempMat, this._tempQuat);\n                mat4.mul(this._animMat, this._animMat, this._tempMat);\n            }\n            else if (this._rot)\n            {\n                mat4.fromQuat(this._tempRotmat, this._rot);\n                mat4.mul(this._animMat, this._animMat, this._tempRotmat);\n            }\n\n            if (playAnims && this._animScale)\n            {\n                if (!this._tempAnimScale) this._tempAnimScale = [1, 1, 1];\n                this._tempAnimScale[0] = this._animScale[0].getValue(_time);\n                this._tempAnimScale[1] = this._animScale[1].getValue(_time);\n                this._tempAnimScale[2] = this._animScale[2].getValue(_time);\n                mat4.scale(this._animMat, this._animMat, this._tempAnimScale);\n            }\n            else if (this._scale) mat4.scale(this._animMat, this._animMat, this._scale);\n\n            mat4.mul(cgl.mMatrix, cgl.mMatrix, this._animMat);\n        }\n\n        if (this.addTranslate) mat4.translate(cgl.mMatrix, cgl.mMatrix, this.addTranslate);\n\n        if (this.addMulMat) mat4.mul(cgl.mMatrix, cgl.mMatrix, this.addMulMat);\n\n        mat4.copy(this.absMat, cgl.mMatrix);\n    }\n\n    render(cgl, dontTransform, dontDrawMesh, ignoreMaterial, ignoreChilds, drawHidden, _time)\n    {\n        if (!dontTransform) cgl.pushModelMatrix();\n\n        if (_time === undefined) _time = gltf.time;\n\n        if (!dontTransform || this.skinRenderer) this.transform(cgl, _time);\n\n        if (this.hidden && !drawHidden)\n        {\n        }\n        else\n        {\n            if (this.skinRenderer)\n            {\n                this.skinRenderer.time = _time;\n                if (!dontDrawMesh)\n                    this.mesh.render(cgl, ignoreMaterial, this.skinRenderer, _time);\n            }\n            else\n            {\n                if (this.mesh && !dontDrawMesh)\n                    this.mesh.render(cgl, ignoreMaterial, null, _time);\n            }\n        }\n\n        if (!ignoreChilds && !this.hidden)\n            for (let i = 0; i < this.children.length; i++)\n                if (gltf.nodes[this.children[i]])\n                    gltf.nodes[this.children[i]].render(cgl, dontTransform, dontDrawMesh, ignoreMaterial, ignoreChilds, drawHidden, _time);\n\n        if (!dontTransform)cgl.popModelMatrix();\n    }\n};\n","inc_print_js":"let tab = null;\n\nfunction closeTab()\n{\n    if (tab)gui.mainTabs.closeTab(tab.id);\n    tab = null;\n}\n\nfunction formatVec(arr)\n{\n    const nums = [];\n    for (let i = 0; i < arr.length; i++)\n    {\n        nums.push(Math.round(arr[i] * 1000) / 1000);\n    }\n\n    return nums.join(\",\");\n}\n\nfunction printNode(html, node, level)\n{\n    if (!gltf) return;\n\n    html += \"<tr class=\\\"row\\\">\";\n\n    let ident = \"\";\n    let identSpace = \"\";\n\n    for (let i = 1; i < level; i++)\n    {\n        identSpace += \"&nbsp;&nbsp;&nbsp;\";\n        let identClass = \"identBg\";\n        if (i == 1)identClass = \"identBgLevel0\";\n        ident += \"<td class=\\\"ident \" + identClass + \"\\\" ><div style=\\\"\\\"></div></td>\";\n    }\n    let id = CABLES.uuid();\n    html += ident;\n    html += \"<td colspan=\\\"\" + (21 - level) + \"\\\">\";\n    // html+='<div style=\"display:inline-block;border:0px solid red;height:10px;width:'+level*10+'px\"></div>';\n\n    if (node.mesh && node.mesh.meshes.length)html += \"<span class=\\\"icon icon-cube\\\"></span>&nbsp;\";\n    else html += \"<span class=\\\"icon icon-box-select\\\"></span> &nbsp;\";\n\n    html += node.name + \"</td><td></td>\";\n\n    if (node.mesh)\n    {\n        html += \"<td>\";\n        for (let i = 0; i < node.mesh.meshes.length; i++)\n        {\n            if (i > 0)html += \", \";\n            html += node.mesh.meshes[i].name;\n        }\n\n        html += \"</td>\";\n\n        html += \"<td>\";\n        html += node.hasSkin() || \"-\";\n        html += \"</td>\";\n\n        html += \"<td>\";\n        let countMats = 0;\n        for (let i = 0; i < node.mesh.meshes.length; i++)\n        {\n            if (countMats > 0)html += \", \";\n            if (gltf.json.materials && node.mesh.meshes[i].hasOwnProperty(\"material\"))\n            {\n                if (gltf.json.materials[node.mesh.meshes[i].material])\n                {\n                    html += gltf.json.materials[node.mesh.meshes[i].material].name;\n                    countMats++;\n                }\n            }\n        }\n        if (countMats == 0)html += \"none\";\n        html += \"</td>\";\n    }\n    else\n    {\n        html += \"<td>-</td><td>-</td><td>-</td>\";\n    }\n\n    html += \"<td>\";\n\n    if (node._node.translation || node._node.rotation || node._node.scale)\n    {\n        let info = \"\";\n\n        if (node._node.translation)info += \"Translate: `\" + formatVec(node._node.translation) + \"` || \";\n        if (node._node.rotation)info += \"Rotation: `\" + formatVec(node._node.rotation) + \"` || \";\n        if (node._node.scale)info += \"Scale: `\" + formatVec(node._node.scale) + \"` || \";\n\n        html += \"<span class=\\\"icon icon-gizmo info\\\" data-info=\\\"\" + info + \"\\\"></span> &nbsp;\";\n    }\n\n    if (node._animRot || node._animScale || node._animTrans)\n    {\n        let info = \"Animated: \";\n        if (node._animRot) info += \"Rot \";\n        if (node._animScale) info += \"Scale \";\n        if (node._animTrans) info += \"Trans \";\n\n        html += \"<span class=\\\"icon icon-clock info\\\" data-info=\\\"\" + info + \"\\\"></span>&nbsp;\";\n    }\n\n    if (!node._node.translation && !node._node.rotation && !node._node.scale && !node._animRot && !node._animScale && !node._animTrans) html += \"-\";\n\n    html += \"</td>\";\n\n    html += \"<td>\";\n    let hideclass = \"\";\n    if (node.hidden)hideclass = \"node-hidden\";\n\n    // html+='';\n    html += \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"','transform')\\\" class=\\\"treebutton\\\">Transform</a>\";\n    html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"','hierarchy')\\\" class=\\\"treebutton\\\">Hierarchy</a>\";\n    html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"')\\\" class=\\\"treebutton\\\">Node</a>\";\n\n    if (node.hasSkin())\n        html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeNode('\" + node.name + \"',false,{skin:true});\\\" class=\\\"treebutton\\\">Skin</a>\";\n\n    html += \"</td><td>\";\n    html += \"&nbsp;<span class=\\\"icon iconhover icon-eye \" + hideclass + \"\\\" onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').toggleNodeVisibility('\" + node.name + \"');this.classList.toggle('node-hidden');\\\"></span>\";\n    html += \"</td>\";\n\n    html += \"</tr>\";\n\n    if (node.children)\n    {\n        for (let i = 0; i < node.children.length; i++)\n            html = printNode(html, gltf.nodes[node.children[i]], level + 1);\n    }\n\n    return html;\n}\n\nfunction printMaterial(mat, idx)\n{\n    let html = \"<tr>\";\n    html += \" <td>\" + idx + \"</td>\";\n    html += \" <td>\" + mat.name + \"</td>\";\n    // html+=' <td><a onclick=\"\" class=\"treebutton\">Assign</a><td>';\n\n    html += \" <td>\";\n\n    const info = JSON.stringify(mat, null, 4).replaceAll(\"\\\"\", \"\").replaceAll(\"\\n\", \"<br/>\");\n\n    html += \"<span class=\\\"icon icon-info\\\" onclick=\\\"new CABLES.UI.ModalDialog({ 'html': '<pre>\" + info + \"</pre>', 'title': '\" + mat.name + \"' });\\\"></span>&nbsp;\";\n\n    if (mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorFactor)\n    {\n        let rgb = \"\";\n        rgb += \"\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[0] * 255);\n        rgb += \",\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[1] * 255);\n        rgb += \",\" + Math.round(mat.pbrMetallicRoughness.baseColorFactor[2] * 255);\n\n        html += \"<div style=\\\"width:15px;height:15px;background-color:rgb(\" + rgb + \");display:inline-block\\\">&nbsp;</a>\";\n    }\n    html += \" <td style=\\\"\\\">\" + (gltf.shaders[idx] ? \"-\" : \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').assignMaterial('\" + mat.name + \"')\\\" class=\\\"treebutton\\\">Assign</a>\") + \"<td>\";\n    html += \"<td>\";\n\n    html += \"</tr>\";\n    return html;\n}\n\nfunction printInfo()\n{\n    if (!gltf) return;\n\n    const startTime = performance.now();\n    const sizes = {};\n    let html = \"<div style=\\\"overflow:scroll;width:100%;height:100%\\\">\";\n\n    html += \"generator:\" + gltf.json.asset.generator;\n\n    let numNodes = 0;\n    if (gltf.json.nodes)numNodes = gltf.json.nodes.length;\n    html += \"<div id=\\\"groupNodes\\\">Nodes (\" + numNodes + \")</div>\";\n\n    html += \"<table id=\\\"sectionNodes\\\" class=\\\"table treetable\\\">\";\n\n    html += \"<tr>\";\n    html += \" <th colspan=\\\"21\\\">Name</th>\";\n    html += \" <th>Mesh</th>\";\n    html += \" <th>Skin</th>\";\n    html += \" <th>Material</th>\";\n    html += \" <th>Transform</th>\";\n    html += \" <th>Expose</th>\";\n    html += \" <th></th>\";\n    html += \"</tr>\";\n\n    for (let i = 0; i < gltf.nodes.length; i++)\n    {\n        if (!gltf.nodes[i].isChild)\n            html = printNode(html, gltf.nodes[i], 1);\n    }\n    html += \"</table>\";\n\n    // / //////////////////\n\n    let numMaterials = 0;\n    if (gltf.json.materials)numMaterials = gltf.json.materials.length;\n    html += \"<div id=\\\"groupMaterials\\\">Materials (\" + numMaterials + \")</div>\";\n\n    if (!gltf.json.materials || gltf.json.materials.length == 0)\n    {\n    }\n    else\n    {\n        html += \"<table id=\\\"materialtable\\\"  class=\\\"table treetable\\\">\";\n        html += \"<tr>\";\n        html += \" <th>Index</th>\";\n        html += \" <th>Name</th>\";\n        html += \" <th>Color</th>\";\n        html += \" <th>Function</th>\";\n        html += \" <th></th>\";\n        html += \"</tr>\";\n        for (let i = 0; i < gltf.json.materials.length; i++)\n        {\n            html += printMaterial(gltf.json.materials[i], i);\n        }\n        html += \"</table>\";\n    }\n\n    // / ///////////////////////\n\n    html += \"<div id=\\\"groupMeshes\\\">Meshes (\" + gltf.json.meshes.length + \")</div>\";\n\n    html += \"<table id=\\\"meshestable\\\"  class=\\\"table treetable\\\">\";\n    html += \"<tr>\";\n    html += \" <th>Name</th>\";\n    html += \" <th>Node</th>\";\n    html += \" <th>Material</th>\";\n    html += \" <th>Vertices</th>\";\n    html += \" <th>Attributes</th>\";\n    html += \"</tr>\";\n\n    let sizeBufferViews = [];\n    sizes.meshes = 0;\n\n    for (let i = 0; i < gltf.json.meshes.length; i++)\n    {\n        html += \"<tr>\";\n        html += \"<td>\" + gltf.json.meshes[i].name + \"</td>\";\n\n        html += \"<td>\";\n        let count = 0;\n        let nodename = \"\";\n        for (var j = 0; j < gltf.json.nodes.length; j++)\n        {\n            if (gltf.json.nodes[j].mesh == i)\n            {\n                count++;\n                if (count == 1)\n                {\n                    nodename = gltf.json.nodes[j].name;\n                }\n            }\n        }\n        if (count > 1) html += (count) + \" nodes (\" + nodename + \" ...)\";\n        else html += nodename;\n        html += \"</td>\";\n\n        // -------\n\n        html += \"<td>\";\n        for (var j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            if (gltf.json.meshes[i].primitives[j].hasOwnProperty(\"material\"))\n            {\n                if (gltf.json.materials[gltf.json.meshes[i]])\n                {\n                    html += gltf.json.materials[gltf.json.meshes[i].primitives[j].material].name + \" \";\n                }\n            }\n            else html += \"None\";\n        }\n        html += \"</td>\";\n\n        html += \"<td>\";\n        let numVerts = 0;\n        for (var j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            if (gltf.json.meshes[i].primitives[j].attributes.POSITION != undefined)\n            {\n                let v = parseInt(gltf.json.accessors[gltf.json.meshes[i].primitives[j].attributes.POSITION].count);\n                numVerts += v;\n                html += \"\" + v + \"<br/>\";\n            }\n            else html += \"-<br/>\";\n        }\n\n        if (gltf.json.meshes[i].primitives.length > 0)\n            html += \"=\" + numVerts;\n        html += \"</td>\";\n\n        html += \"<td style=\\\"vertical-align:top;\\\">\";\n        for (let j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            html += Object.keys(gltf.json.meshes[i].primitives[j].attributes);\n            html += \" <a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeGeom('\" + gltf.json.meshes[i].name + \"',\" + j + \")\\\" class=\\\"treebutton\\\">Geometry</a>\";\n            html += \"<br/>\";\n        }\n        html += \"</td>\";\n        html += \"</tr>\";\n\n        for (let j = 0; j < gltf.json.meshes[i].primitives.length; j++)\n        {\n            const accessor = gltf.json.accessors[gltf.json.meshes[i].primitives[j].indices];\n            if (accessor)\n            {\n                let bufView = accessor.bufferView;\n\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    if (gltf.json.bufferViews[bufView])sizes.meshes += gltf.json.bufferViews[bufView].byteLength;\n                }\n            }\n\n            for (let k in gltf.json.meshes[i].primitives[j].attributes)\n            {\n                const attr = gltf.json.meshes[i].primitives[j].attributes[k];\n                const bufView2 = gltf.json.accessors[attr].bufferView;\n\n                if (sizeBufferViews.indexOf(bufView2) == -1)\n                {\n                    sizeBufferViews.push(bufView2);\n                    if (gltf.json.bufferViews[bufView2])sizes.meshes += gltf.json.bufferViews[bufView2].byteLength;\n                }\n            }\n        }\n    }\n    html += \"</table>\";\n\n    // / //////////////////////////////////\n\n    let numAnims = 0;\n    if (gltf.json.animations)numAnims = gltf.json.animations.length;\n    html += \"<div id=\\\"groupAnims\\\">Animations (\" + numAnims + \")</div>\";\n\n    if (gltf.json.animations)\n    {\n        html += \"<table id=\\\"sectionAnim\\\" class=\\\"table treetable\\\">\";\n        html += \"<tr>\";\n        html += \"  <th>Name</th>\";\n        html += \"  <th>Target node</th>\";\n        html += \"  <th>Path</th>\";\n        html += \"  <th>Interpolation</th>\";\n        html += \"  <th>Keys</th>\";\n        html += \"</tr>\";\n\n        sizes.animations = 0;\n\n        for (let i = 0; i < gltf.json.animations.length; i++)\n        {\n            for (let j = 0; j < gltf.json.animations[i].samplers.length; j++)\n            {\n                let bufView = gltf.json.accessors[gltf.json.animations[i].samplers[j].input].bufferView;\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    sizes.animations += gltf.json.bufferViews[bufView].byteLength;\n                }\n\n                bufView = gltf.json.accessors[gltf.json.animations[i].samplers[j].output].bufferView;\n                if (sizeBufferViews.indexOf(bufView) == -1)\n                {\n                    sizeBufferViews.push(bufView);\n                    sizes.animations += gltf.json.bufferViews[bufView].byteLength;\n                }\n            }\n\n            for (let j = 0; j < gltf.json.animations[i].channels.length; j++)\n            {\n                html += \"<tr>\";\n                html += \"  <td> Anim \" + i + \": \" + gltf.json.animations[i].name + \"</td>\";\n\n                html += \"  <td>\" + gltf.nodes[gltf.json.animations[i].channels[j].target.node].name + \"</td>\";\n                html += \"  <td>\";\n                html += gltf.json.animations[i].channels[j].target.path + \" \";\n                html += \"  </td>\";\n\n                const smplidx = gltf.json.animations[i].channels[j].sampler;\n                const smplr = gltf.json.animations[i].samplers[smplidx];\n\n                html += \"  <td>\" + smplr.interpolation + \"</td>\";\n\n                html += \"  <td>\" + gltf.json.accessors[smplr.output].count;\n\n                html += \"&nbsp;&nbsp;<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').showAnim('\" + i + \"','\" + j + \"')\\\" class=\\\"icon icon-search\\\"></a>\";\n\n                html += \"</td>\";\n\n                html += \"</tr>\";\n            }\n        }\n        html += \"</table>\";\n    }\n    else\n    {\n\n    }\n\n    // / ///////////////////\n\n    let numImages = 0;\n    if (gltf.json.images)numImages = gltf.json.images.length;\n    html += \"<div id=\\\"groupImages\\\">Images (\" + numImages + \")</div>\";\n\n    if (gltf.json.images)\n    {\n        html += \"<table id=\\\"sectionImages\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th>type</th>\";\n        html += \"  <th>func</th>\";\n\n        html += \"</tr>\";\n\n        sizes.images = 0;\n\n        for (let i = 0; i < gltf.json.images.length; i++)\n        {\n            if (gltf.json.images[i].bufferView)\n                sizes.images += gltf.json.bufferViews[gltf.json.images[i].bufferView].byteLength;\n\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.images[i].name + \"</td>\";\n            html += \"<td>\" + gltf.json.images[i].mimeType + \"</td>\";\n            html += \"<td>\";\n\n            let name = gltf.json.images[i].name;\n            if (name === undefined)name = gltf.json.images[i].bufferView;\n\n            html += \"<a onclick=\\\"gui.corePatch().getOpById('\" + op.id + \"').exposeTexture('\" + name + \"')\\\" class=\\\"treebutton\\\">Expose</a>\";\n            html += \"</td>\";\n\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / ///////////////////////\n\n    let numCameras = 0;\n    if (gltf.json.cameras)numCameras = gltf.json.cameras.length;\n    html += \"<div id=\\\"groupCameras\\\">Cameras (\" + numCameras + \")</div>\";\n\n    if (gltf.json.cameras)\n    {\n        html += \"<table id=\\\"sectionCameras\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th>type</th>\";\n        html += \"  <th>info</th>\";\n        html += \"</tr>\";\n\n        for (let i = 0; i < gltf.json.cameras.length; i++)\n        {\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.cameras[i].name + \"</td>\";\n            html += \"<td>\" + gltf.json.cameras[i].type + \"</td>\";\n            html += \"<td>\";\n\n            if (gltf.json.cameras[i].perspective)\n            {\n                html += \"yfov: \" + Math.round(gltf.json.cameras[i].perspective.yfov * 100) / 100;\n                html += \", \";\n                html += \"zfar: \" + Math.round(gltf.json.cameras[i].perspective.zfar * 100) / 100;\n                html += \", \";\n                html += \"znear: \" + Math.round(gltf.json.cameras[i].perspective.znear * 100) / 100;\n            }\n            html += \"</td>\";\n\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / ////////////////////////////////////\n\n    let numSkins = 0;\n    if (gltf.json.skins)numSkins = gltf.json.skins.length;\n    html += \"<div id=\\\"groupSkins\\\">Skins (\" + numSkins + \")</div>\";\n\n    if (gltf.json.skins)\n    {\n        // html += \"<h3>Skins (\" + gltf.json.skins.length + \")</h3>\";\n        html += \"<table id=\\\"sectionSkins\\\" class=\\\"table treetable\\\">\";\n\n        html += \"<tr>\";\n        html += \"  <th>name</th>\";\n        html += \"  <th></th>\";\n        html += \"  <th>total joints</th>\";\n        html += \"</tr>\";\n\n        for (let i = 0; i < gltf.json.skins.length; i++)\n        {\n            html += \"<tr>\";\n            html += \"<td>\" + gltf.json.skins[i].name + \"</td>\";\n            html += \"<td>\" + \"</td>\";\n            html += \"<td>\" + gltf.json.skins[i].joints.length + \"</td>\";\n            html += \"<td>\";\n            html += \"</td>\";\n            html += \"<tr>\";\n        }\n        html += \"</table>\";\n    }\n\n    // / //////////////////////////\n\n    let sizeBin = 0;\n    if (gltf.json.buffers)\n        sizeBin = gltf.json.buffers[0].byteLength;\n\n    html += \"<div id=\\\"groupBinary\\\">File Size Allocation (\" + Math.round(sizeBin / 1024) + \"k )</div>\";\n\n    html += \"<table id=\\\"sectionBinary\\\" class=\\\"table treetable\\\">\";\n    html += \"<tr>\";\n    html += \"  <th>name</th>\";\n    html += \"  <th>size</th>\";\n    html += \"  <th>%</th>\";\n    html += \"</tr>\";\n    let sizeUnknown = sizeBin;\n    for (let i in sizes)\n    {\n        // html+=i+':'+Math.round(sizes[i]/1024);\n        html += \"<tr>\";\n        html += \"<td>\" + i + \"</td>\";\n        html += \"<td>\" + readableSize(sizes[i]) + \" </td>\";\n        html += \"<td>\" + Math.round(sizes[i] / sizeBin * 100) + \"% </td>\";\n        html += \"<tr>\";\n        sizeUnknown -= sizes[i];\n    }\n\n    if (sizeUnknown != 0)\n    {\n        html += \"<tr>\";\n        html += \"<td>unknown</td>\";\n        html += \"<td>\" + readableSize(sizeUnknown) + \" </td>\";\n        html += \"<td>\" + Math.round(sizeUnknown / sizeBin * 100) + \"% </td>\";\n        html += \"<tr>\";\n    }\n\n    html += \"</table>\";\n    html += \"</div>\";\n\n    tab = new CABLES.UI.Tab(\"GLTF\", { \"icon\": \"cube\", \"infotext\": \"tab_gltf\", \"padding\": true, \"singleton\": true });\n    gui.mainTabs.addTab(tab, true);\n\n    tab.addEventListener(\"onClose\", closeTab);\n    tab.html(html);\n\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupNodes\"), ele.byId(\"sectionNodes\"), false);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupMaterials\"), ele.byId(\"materialtable\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupAnims\"), ele.byId(\"sectionAnim\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupMeshes\"), ele.byId(\"meshestable\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupCameras\"), ele.byId(\"sectionCameras\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupImages\"), ele.byId(\"sectionImages\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupSkins\"), ele.byId(\"sectionSkins\"), true);\n    CABLES.UI.Collapsable.setup(ele.byId(\"groupBinary\"), ele.byId(\"sectionBinary\"), true);\n\n    gui.maintabPanel.show(true);\n}\n\nfunction readableSize(n)\n{\n    if (n > 1024) return Math.round(n / 1024) + \" kb\";\n    if (n > 1024 * 500) return Math.round(n / 1024) + \" mb\";\n    else return n + \" bytes\";\n}\n","inc_skin_js":"const GltfSkin = class\n{\n    constructor(node)\n    {\n        this._mod = null;\n        this._node = node;\n        this._lastTime = 0;\n        this._matArr = [];\n        this._m = mat4.create();\n        this._invBindMatrix = mat4.create();\n        this.identity = true;\n    }\n\n    renderFinish(cgl)\n    {\n        cgl.popModelMatrix();\n        this._mod.unbind();\n    }\n\n    renderStart(cgl, time)\n    {\n        if (!this._mod)\n        {\n            this._mod = new CGL.ShaderModifier(cgl, op.name + this._node.name);\n\n            this._mod.addModule({\n                \"priority\": -2,\n                \"name\": \"MODULE_VERTEX_POSITION\",\n                \"srcHeadVert\": attachments.skin_head_vert || \"\",\n                \"srcBodyVert\": attachments.skin_vert || \"\"\n            });\n\n            this._mod.addUniformVert(\"m4[]\", \"MOD_boneMats\", []);// bohnenmatze\n            const tr = vec3.create();\n        }\n\n        const skinIdx = this._node.skin;\n        const arrLength = gltf.json.skins[skinIdx].joints.length * 16;\n\n        // if (this._lastTime != time || !time)\n        {\n            // this._lastTime=inTime.get();\n            if (this._matArr.length != arrLength) this._matArr.length = arrLength;\n\n            for (let i = 0; i < gltf.json.skins[skinIdx].joints.length; i++)\n            {\n                const i16 = i * 16;\n                const jointIdx = gltf.json.skins[skinIdx].joints[i];\n                const nodeJoint = gltf.nodes[jointIdx];\n\n                for (let j = 0; j < 16; j++)\n                    this._invBindMatrix[j] = gltf.accBuffers[gltf.json.skins[skinIdx].inverseBindMatrices][i16 + j];\n\n                mat4.mul(this._m, nodeJoint.modelMatAbs(), this._invBindMatrix);\n\n                for (let j = 0; j < this._m.length; j++) this._matArr[i16 + j] = this._m[j];\n            }\n\n            this._mod.setUniformValue(\"MOD_boneMats\", this._matArr);\n            this._lastTime = time;\n        }\n\n        this._mod.define(\"SKIN_NUM_BONES\", gltf.json.skins[skinIdx].joints.length);\n        this._mod.bind();\n\n        // draw mesh...\n        cgl.pushModelMatrix();\n        if (this.identity)mat4.identity(cgl.mMatrix);\n    }\n};\n","skin_vert":"int index=int(attrJoints.x);\nvec4 newPos = (MOD_boneMats[index] * pos) * attrWeights.x;\nvec3 newNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.x).xyz);\n\nindex=int(attrJoints.y);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.y;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.y).xyz)+newNorm;\n\nindex=int(attrJoints.z);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.z;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.z).xyz)+newNorm;\n\nindex=int(attrJoints.w);\nnewPos += (MOD_boneMats[index] * pos) * attrWeights.w ;\nnewNorm = (vec4((MOD_boneMats[index] * vec4(norm.xyz, 0.0)) * attrWeights.w).xyz)+newNorm;\n\npos=newPos;\n\nnorm=normalize(newNorm.xyz);\n\n\n","skin_head_vert":"\nIN vec4 attrWeights;\nIN vec4 attrJoints;\nUNI mat4 MOD_boneMats[SKIN_NUM_BONES];\n",};
 const gltfCamera = class
 {
     constructor(gltf, node)
@@ -19469,7 +19535,7 @@ const Gltf = class
         this.timing = [];
         this.cams = [];
         this.startTime = performance.now();
-        this.bounds = new CGL.BoundingBox();
+        this.bounds = new CABLES.CG.BoundingBox();
         this.loaded = Date.now();
         this.accBuffersDelete = [];
     }
@@ -19671,6 +19737,8 @@ function loadAnims(gltf)
             }
         }
     }
+
+    gltf.uniqueAnimNames = uniqueAnimNames;
 
     outAnims.set(null);
     outAnims.set(Object.keys(uniqueAnimNames));
@@ -19971,13 +20039,34 @@ let gltfMesh = class
 
             if (this.materialJson && this.materialJson.pbrMetallicRoughness)
             {
-                if (this.materialJson.pbrMetallicRoughness.baseColorFactor)
+                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty("baseColorFactor"))
+                {
+                    this._matDiffuseColor = [1, 1, 1, 1];
+                }
+                else
+                {
                     this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;
+                }
 
                 this._matDiffuseColor = this.materialJson.pbrMetallicRoughness.baseColorFactor;
 
-                this._matPbrMetalness = this.materialJson.pbrMetallicRoughness.metallicFactor || null;
-                this._matPbrRoughness = this.materialJson.pbrMetallicRoughness.roughnessFactor || null;
+                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty("metallicFactor"))
+                {
+                    this._matPbrMetalness = 1.0;
+                }
+                else
+                {
+                    this._matPbrMetalness = this.materialJson.pbrMetallicRoughness.metallicFactor || null;
+                }
+
+                if (!this.materialJson.pbrMetallicRoughness.hasOwnProperty("roughnessFactor"))
+                {
+                    this._matPbrRoughness = 1.0;
+                }
+                else
+                {
+                    this._matPbrRoughness = this.materialJson.pbrMetallicRoughness.roughnessFactor || null;
+                }
             }
         }
 
@@ -20246,7 +20335,7 @@ let gltfMesh = class
             }
 
             this.mesh = new CGL.Mesh(cgl, g, glprim);
-            this.mesh._geom = null;
+            // this.mesh._geom = null;
         }
         else
         {
@@ -20319,7 +20408,10 @@ let gltfMesh = class
                         this._matPbrRoughnessOrig = uniPbrRoughness.getValue();
                         uniPbrRoughness.setValue(this._matPbrRoughness);
                     }
-                    else uniPbrRoughness.setValue(0);
+                    else
+                    {
+                        uniPbrRoughness.setValue(0);
+                    }
             }
 
             if (this.mesh) this.mesh.render(cgl.getShader(), ignoreMaterial);
@@ -20339,7 +20431,7 @@ const gltfMeshGroup = class
 {
     constructor(gltf, m)
     {
-        this.bounds = new CGL.BoundingBox();
+        this.bounds = new CABLES.CG.BoundingBox();
         this.meshes = [];
         this.name = m.name;
         const prims = m.primitives;
@@ -20409,18 +20501,12 @@ const gltfNode = class
     copy()
     {
         this.isCopy = true;
-        // console.log(this);
         const n = new gltfNode(this._node, this._gltf);
         n.copyOf = this;
 
         n._animActions = this._animActions;
         n.children = this.children;
         n.skinRenderer = new GltfSkin(n);
-
-        // console.log("COPY!!!");
-        // console.log((n._animActions));
-
-        // console.log(this._animActions);
 
         this.updateMatrix();
         return n;
@@ -20698,6 +20784,17 @@ function closeTab()
     tab = null;
 }
 
+function formatVec(arr)
+{
+    const nums = [];
+    for (let i = 0; i < arr.length; i++)
+    {
+        nums.push(Math.round(arr[i] * 1000) / 1000);
+    }
+
+    return nums.join(",");
+}
+
 function printNode(html, node, level)
 {
     if (!gltf) return;
@@ -20762,13 +20859,30 @@ function printNode(html, node, level)
     }
 
     html += "<td>";
+
+    if (node._node.translation || node._node.rotation || node._node.scale)
+    {
+        let info = "";
+
+        if (node._node.translation)info += "Translate: `" + formatVec(node._node.translation) + "` || ";
+        if (node._node.rotation)info += "Rotation: `" + formatVec(node._node.rotation) + "` || ";
+        if (node._node.scale)info += "Scale: `" + formatVec(node._node.scale) + "` || ";
+
+        html += "<span class=\"icon icon-gizmo info\" data-info=\"" + info + "\"></span> &nbsp;";
+    }
+
     if (node._animRot || node._animScale || node._animTrans)
     {
-        if (node._animRot) html += "Rot ";
-        if (node._animScale) html += "Scale ";
-        if (node._animTrans) html += "Trans ";
+        let info = "Animated: ";
+        if (node._animRot) info += "Rot ";
+        if (node._animScale) info += "Scale ";
+        if (node._animTrans) info += "Trans ";
+
+        html += "<span class=\"icon icon-clock info\" data-info=\"" + info + "\"></span>&nbsp;";
     }
-    else html += "None";
+
+    if (!node._node.translation && !node._node.rotation && !node._node.scale && !node._animRot && !node._animScale && !node._animTrans) html += "-";
+
     html += "</td>";
 
     html += "<td>";
@@ -20806,6 +20920,11 @@ function printMaterial(mat, idx)
     // html+=' <td><a onclick="" class="treebutton">Assign</a><td>';
 
     html += " <td>";
+
+    const info = JSON.stringify(mat, null, 4).replaceAll("\"", "").replaceAll("\n", "<br/>");
+
+    html += "<span class=\"icon icon-info\" onclick=\"new CABLES.UI.ModalDialog({ 'html': '<pre>" + info + "</pre>', 'title': '" + mat.name + "' });\"></span>&nbsp;";
+
     if (mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorFactor)
     {
         let rgb = "";
@@ -20813,7 +20932,7 @@ function printMaterial(mat, idx)
         rgb += "," + Math.round(mat.pbrMetallicRoughness.baseColorFactor[1] * 255);
         rgb += "," + Math.round(mat.pbrMetallicRoughness.baseColorFactor[2] * 255);
 
-        html += "<div style=\"width:15px;height:15px;;background-color:rgb(" + rgb + ")\">&nbsp;</a>";
+        html += "<div style=\"width:15px;height:15px;background-color:rgb(" + rgb + ");display:inline-block\">&nbsp;</a>";
     }
     html += " <td style=\"\">" + (gltf.shaders[idx] ? "-" : "<a onclick=\"gui.corePatch().getOpById('" + op.id + "').assignMaterial('" + mat.name + "')\" class=\"treebutton\">Assign</a>") + "<td>";
     html += "<td>";
@@ -20843,7 +20962,7 @@ function printInfo()
     html += " <th>Mesh</th>";
     html += " <th>Skin</th>";
     html += " <th>Material</th>";
-    html += " <th>Anim</th>";
+    html += " <th>Transform</th>";
     html += " <th>Expose</th>";
     html += " <th></th>";
     html += "</tr>";
@@ -20896,8 +21015,6 @@ function printInfo()
 
     let sizeBufferViews = [];
     sizes.meshes = 0;
-
-    console.log(gltf);
 
     for (let i = 0; i < gltf.json.meshes.length; i++)
     {
@@ -21125,11 +21242,15 @@ function printInfo()
             html += "<td>" + gltf.json.cameras[i].name + "</td>";
             html += "<td>" + gltf.json.cameras[i].type + "</td>";
             html += "<td>";
-            html += "yfov: " + Math.round(gltf.json.cameras[i].perspective.yfov * 100) / 100;
-            html += ", ";
-            html += "zfar: " + Math.round(gltf.json.cameras[i].perspective.zfar * 100) / 100;
-            html += ", ";
-            html += "znear: " + Math.round(gltf.json.cameras[i].perspective.znear * 100) / 100;
+
+            if (gltf.json.cameras[i].perspective)
+            {
+                html += "yfov: " + Math.round(gltf.json.cameras[i].perspective.yfov * 100) / 100;
+                html += ", ";
+                html += "zfar: " + Math.round(gltf.json.cameras[i].perspective.zfar * 100) / 100;
+                html += ", ";
+                html += "znear: " + Math.round(gltf.json.cameras[i].perspective.znear * 100) / 100;
+            }
             html += "</td>";
 
             html += "<tr>";
@@ -21302,8 +21423,8 @@ const GltfSkin = class
 // https://raw.githubusercontent.com/KhronosGroup/glTF/master/specification/2.0/figures/gltfOverview-2.0.0b.png
 
 const
-    dataPort = op.inString("data"),
     inExec = op.inTrigger("Render"),
+    dataPort = op.inString("data"),
     inFile = op.inUrl("glb File", [".glb"]),
     inRender = op.inBool("Draw", true),
     inCamera = op.inDropDown("Camera", ["None"], "None"),
@@ -21532,8 +21653,6 @@ inExec.onTriggered = function ()
     cgl.popModelMatrix();
 
     if (cam)cam.end();
-
-    // console.log(gltfTransforms);
 };
 
 function finishLoading()
@@ -21557,7 +21676,7 @@ function finishLoading()
     // op.refreshParams();
     outAnimLength.set(maxTime);
 
-    gltf.bounds = new CGL.BoundingBox();
+    gltf.bounds = new CABLES.CG.BoundingBox();
     // gltf.bounds.applyPos(0, 0, 0);
 
     if (!gltf)op.setUiError("urlerror", "could not load gltf:<br/>\"" + inFile.get() + "\"", 2);
@@ -21624,8 +21743,6 @@ function finishLoading()
     cgl.patch.loading.finished(loadingId);
     loadingId = null;
 
-    // console.log(gltf.accBuffersDelete);
-
     // if (gltf.chunks.length > 1) gltf.chunks[1] = null;
     // if (gltf.chunks.length > 2) gltf.chunks[2] = null;
 
@@ -21636,11 +21753,9 @@ function finishLoading()
         for (let i = 0; i < gltf.accBuffersDelete.length; i++)
         {
             gltf.accBuffers[gltf.accBuffersDelete[i]] = null;
-            // console.log("delete",i,gltf.accBuffersDelete[i]);
         }
     }
 
-    // console.log("gltf timing", gltf.timing);
     finishedLoading = true;
 }
 
@@ -21659,7 +21774,7 @@ function loadBin(addCacheBuster)
     finishedLoading = false;
     outLoading.set(true);
     fetch(url)
-        .then((res) => res.arrayBuffer())
+        .then((res) => { return res.arrayBuffer(); })
         .then((arrayBuffer) =>
         {
             if (inFile.get() != fileToLoad)
@@ -21732,18 +21847,14 @@ function updateMaterials()
         const portShader = op.getPort("Shader");
         const portName = op.getPort("Material Name");
 
-        // console.log(inMaterials.get());
-
         if (!portShader && !portName)
         {
             const inMats = inMaterials.get();
             for (let matname in inMats)
             {
-                console.log("matname", matname);
                 if (inMats[matname] && gltf.json.materials)
                     for (let i = 0; i < gltf.json.materials.length; i++)
                     {
-                        console.log("gltf.json.materials[i].name", gltf.json.materials[i].name);
                         if (gltf.json.materials[i].name == matname)
                         {
                             if (gltf.shaders[i])
@@ -21751,7 +21862,6 @@ function updateMaterials()
                                 op.warn("double material assignment:", name);
                             }
                             gltf.shaders[i] = inMats[matname];
-                            console.log("shader found!", gltf.shaders[i]);
                         }
                     }
             }
@@ -21987,10 +22097,6 @@ op.toggleNodeVisibility = function (name)
 
 op.showAnim = function (anim, channel)
 {
-    console.log("showanim", channel);
-
-    console.log(gltf.json.animations[anim].channels[channel]);
-
     const an = gltf.json.animations[anim];
     const chan = gltf.json.animations[anim].channels[channel];
 
@@ -22002,13 +22108,6 @@ op.showAnim = function (anim, channel)
 
     const accOut = gltf.json.accessors[sampler.output];
     const bufferOut = gltf.accBuffers[sampler.output];
-
-    console.log({
-        "channel": chan,
-        "sampler": sampler,
-        "bufferIn": bufferIn,
-        "bufferOut": bufferOut,
-    });
 };
 
 function uniqueArray(arr)
@@ -22372,11 +22471,9 @@ let shader = new CGL.Shader(cgl, op.name);
 shader.define("METH_LUMI");
 
 shader.setSource(shader.getDefaultVertexShader(), attachments.colormap_frag);
-var textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
-
-var textureUniform = new CGL.Uniform(shader, "t", "gradient", 1);
+let textureUniform = new CGL.Uniform(shader, "t", "tex", 0);
+let textureUniform2 = new CGL.Uniform(shader, "t", "gradient", 1);
 let uniPos = new CGL.Uniform(shader, "f", "pos", inPos);
-
 let uniMin = new CGL.Uniform(shader, "f", "vmin", inMin);
 let uniMax = new CGL.Uniform(shader, "f", "vmax", inMax);
 let uniAmount = new CGL.Uniform(shader, "f", "amount", amount);
@@ -22391,7 +22488,7 @@ inMethod.onChange = () =>
 
 render.onTriggered = function ()
 {
-    if (!CGL.TextureEffect.checkOpInEffect(op,3)) return;
+    if (!CGL.TextureEffect.checkOpInEffect(op, 3)) return;
     if (!inGradient.get()) return;
 
     cgl.pushShader(shader);
@@ -22510,104 +22607,103 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    exe=op.inTrigger("exe"),
-    reset=op.inTriggerButton("reset"),
-    rewind=op.inTriggerButton("rewind"),
-    inStart=op.inValueFloat("start",0),
-    inEnd=op.inValueFloat("end",1),
-    duration=op.inValueFloat("duration",0.5),
-    loop=op.inValueBool("loop"),
-    waitForReset=op.inValueBool("Wait for Reset",true),
-    next=op.outTrigger("Next"),
-    result=op.outValue("result"),
-    finished=op.outValue("finished"),
-    finishedTrigger=op.outTrigger("Finished Trigger");
+    exe = op.inTrigger("exe"),
+    reset = op.inTriggerButton("reset"),
+    rewind = op.inTriggerButton("rewind"),
+    inStart = op.inValueFloat("start", 0),
+    inEnd = op.inValueFloat("end", 1),
+    duration = op.inValueFloat("duration", 0.5),
+    loop = op.inValueBool("loop"),
+    waitForReset = op.inValueBool("Wait for Reset", true),
+    next = op.outTrigger("Next"),
+    result = op.outNumber("result"),
+    finished = op.outNumber("finished"),
+    finishedTrigger = op.outTrigger("Finished Trigger");
 
-const anim=new CABLES.Anim();
-var resetted=false;
-anim.createPort(op,"easing",init);
-var currentEasing=-1;
-loop.onChange=init;
+const anim = new CABLES.Anim();
+let resetted = false;
+anim.createPort(op, "easing", init);
+let currentEasing = -1;
+loop.onChange = init;
 init();
 
-duration.onChange=init;
+duration.onChange = init;
 
 
 function init()
 {
-    if(anim.keys.length!=3)
+    if (anim.keys.length != 3)
     {
-        anim.setValue(0,0);
-        anim.setValue(1,0);
-        anim.setValue(2,0);
+        anim.setValue(0, 0);
+        anim.setValue(1, 0);
+        anim.setValue(2, 0);
     }
 
-    anim.keys[0].time=CABLES.now()/1000.0;
-    anim.keys[0].value=inStart.get();
-    if(anim.defaultEasing!=currentEasing) anim.keys[0].setEasing(anim.defaultEasing);
+    anim.keys[0].time = CABLES.now() / 1000.0;
+    anim.keys[0].value = inStart.get();
+    if (anim.defaultEasing != currentEasing) anim.keys[0].setEasing(anim.defaultEasing);
 
-    anim.keys[1].time=duration.get()+CABLES.now()/1000.0;
-    anim.keys[1].value=inEnd.get();
+    anim.keys[1].time = duration.get() + CABLES.now() / 1000.0;
+    anim.keys[1].value = inEnd.get();
 
-    if(anim.defaultEasing!=currentEasing) anim.keys[1].setEasing(anim.defaultEasing);
+    if (anim.defaultEasing != currentEasing) anim.keys[1].setEasing(anim.defaultEasing);
 
-    anim.loop=loop.get();
-    if(anim.loop)
+    anim.loop = loop.get();
+    if (anim.loop)
     {
-        anim.keys[2].time=(2.0*duration.get())+CABLES.now()/1000.0;
-        anim.keys[2].value=inStart.get();
-        if(anim.defaultEasing!=currentEasing) anim.keys[2].setEasing(anim.defaultEasing);
+        anim.keys[2].time = (2.0 * duration.get()) + CABLES.now() / 1000.0;
+        anim.keys[2].value = inStart.get();
+        if (anim.defaultEasing != currentEasing) anim.keys[2].setEasing(anim.defaultEasing);
     }
     else
     {
-        anim.keys[2].time=anim.keys[1].time;
-        anim.keys[2].value=anim.keys[1].value;
-        if(anim.defaultEasing!=currentEasing) anim.keys[2].setEasing(anim.defaultEasing);
+        anim.keys[2].time = anim.keys[1].time;
+        anim.keys[2].value = anim.keys[1].value;
+        if (anim.defaultEasing != currentEasing) anim.keys[2].setEasing(anim.defaultEasing);
     }
     finished.set(false);
 
-    currentEasing=anim.defaultEasing;
+    currentEasing = anim.defaultEasing;
 }
 
-reset.onTriggered=function()
+reset.onTriggered = function ()
 {
-    resetted=true;
+    resetted = true;
     init();
 };
 
-rewind.onTriggered=function()
+rewind.onTriggered = function ()
 {
-    anim.keys[0].time=CABLES.now()/1000.0;
-    anim.keys[0].value=inStart.get();
+    anim.keys[0].time = CABLES.now() / 1000.0;
+    anim.keys[0].value = inStart.get();
 
-    anim.keys[1].time=CABLES.now()/1000.0;
-    anim.keys[1].value=inStart.get();
+    anim.keys[1].time = CABLES.now() / 1000.0;
+    anim.keys[1].value = inStart.get();
 
-    anim.keys[2].time=CABLES.now()/1000.0;
-    anim.keys[2].value=inStart.get();
+    anim.keys[2].time = CABLES.now() / 1000.0;
+    anim.keys[2].value = inStart.get();
 
     result.set(inStart.get());
 };
 
-exe.onTriggered=function()
+exe.onTriggered = function ()
 {
-    if(waitForReset.get() && !resetted)
+    if (waitForReset.get() && !resetted)
     {
         result.set(inStart.get());
         return;
     }
-    var t=CABLES.now()/1000;
-    var v=anim.getValue(t);
+    let t = CABLES.now() / 1000;
+    let v = anim.getValue(t);
     result.set(v);
-    if(anim.hasEnded(t))
+    if (anim.hasEnded(t))
     {
-        if(!finished.get()) finishedTrigger.trigger();
+        if (!finished.get()) finishedTrigger.trigger();
         finished.set(true);
     }
 
     next.trigger();
 };
-
 
 
 };
@@ -22691,7 +22787,6 @@ const
     scale = op.inValueFloat("scale", 1.0),
     trigger = op.outTrigger("trigger");
 
-const cgl = op.patch.cgl;
 const vScale = vec3.create();
 
 scale.onChange = scaleChanged;
@@ -22699,6 +22794,7 @@ scaleChanged();
 
 render.onTriggered = function ()
 {
+    const cgl = op.patch.cg;
     cgl.pushModelMatrix();
     mat4.scale(cgl.mMatrix, cgl.mMatrix, vScale);
     trigger.trigger();
@@ -22732,24 +22828,23 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    x1=op.inValue("x1"),
-    y1=op.inValue("y1"),
-    x2=op.inValue("x2"),
-    y2=op.inValue("y2"),
-    dist=op.outValue("distance");
+    x1 = op.inValue("x1"),
+    y1 = op.inValue("y1"),
+    x2 = op.inValue("x2"),
+    y2 = op.inValue("y2"),
+    dist = op.outNumber("distance");
 
-x1.onChange=
-y1.onChange=
-x2.onChange=
-y2.onChange=calc;
+x1.onChange =
+y1.onChange =
+x2.onChange =
+y2.onChange = calc;
 
 function calc()
 {
-	const xd = x2.get()-x1.get();
-	const yd = y2.get()-y1.get();
-	dist.set(Math.sqrt(xd*xd + yd*yd));
+    const xd = x2.get() - x1.get();
+    const yd = y2.get() - y1.get();
+    dist.set(Math.sqrt(xd * xd + yd * yd));
 }
-
 
 
 };
@@ -22891,7 +22986,7 @@ const
     inBreaks = op.inValueBool("Convert Line Breaks", false),
     inPropagation = op.inValueBool("Propagate Click-Events", true),
     outElement = op.outObject("DOM Element", null, "element"),
-    outHover = op.outValue("Hover"),
+    outHover = op.outBoolNum("Hover"),
     outClicked = op.outTrigger("Clicked");
 
 let listenerElement = null;
@@ -23374,15 +23469,17 @@ Ops.Trigger.TriggerNumber = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const exe0 = op.inTriggerButton("0");
-const exe1 = op.inTriggerButton("1");
-const exe2 = op.inTriggerButton("2");
-const exe3 = op.inTriggerButton("3");
-const exe4 = op.inTriggerButton("4");
-const exe5 = op.inTriggerButton("5");
-const exe6 = op.inTriggerButton("6");
-const exe7 = op.inTriggerButton("7");
-const number = op.outValue("number");
+const
+    exe0 = op.inTriggerButton("0"),
+    exe1 = op.inTriggerButton("1"),
+    exe2 = op.inTriggerButton("2"),
+    exe3 = op.inTriggerButton("3"),
+    exe4 = op.inTriggerButton("4"),
+    exe5 = op.inTriggerButton("5"),
+    exe6 = op.inTriggerButton("6"),
+    exe7 = op.inTriggerButton("7"),
+    number = op.outNumber("number");
+
 number.changeAlways = true;
 const outTrig = op.outTrigger("Triggered");
 
@@ -23738,15 +23835,14 @@ Ops.Math.Floor = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const number1=op.inValue("Number");
-const result=op.outValue("Result");
-number1.onChange=exec;
+const number1 = op.inValue("Number");
+const result = op.outNumber("Result");
+number1.onChange = exec;
 
 function exec()
 {
     result.set(Math.floor(number1.get()));
 }
-
 
 
 };
@@ -23921,7 +24017,7 @@ const
     bool7 = op.inValueBool("bool 8"),
     bool8 = op.inValueBool("bool 9"),
     bool9 = op.inValueBool("bool 10"),
-    result = op.outValueBool("result");
+    result = op.outBoolNum("result");
 
 bool0.onChange =
     bool1.onChange =
@@ -23959,37 +24055,35 @@ Ops.Gl.Matrix.Billboard = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const exec=op.inTrigger("Exec");
-const next=op.outTrigger("Next");
+const exec = op.inTrigger("Exec");
+const next = op.outTrigger("Next");
 
-const cgl=op.patch.cgl;
+const cgl = op.patch.cgl;
 
-var mm=mat4.create();
-var mv=mat4.create();
+let mm = mat4.create();
+let mv = mat4.create();
+let m = mat4.create();
+let mempty = mat4.create();
 
-var m=mat4.create();
-var mempty=mat4.create();
-
-exec.onTriggered=function()
+exec.onTriggered = function ()
 {
-    mat4.invert(mm,cgl.mMatrix);
-    mat4.invert(mv,cgl.vMatrix);
+    mat4.invert(mm, cgl.mMatrix);
+    mat4.invert(mv, cgl.vMatrix);
 
+    mat4.mul(mm, mm, mv);
 
-    mat4.mul(mm,mm,mv);
-    
-    mm[12]=0;
-    mm[13]=0;
-    mm[14]=0;
-
+    mm[12] = 0;
+    mm[13] = 0;
+    mm[14] = 0;
 
     cgl.pushModelMatrix();
     cgl.pushViewMatrix();
-    mat4.mul(cgl.mMatrix,cgl.mMatrix,mm);
+    mat4.mul(cgl.mMatrix, cgl.mMatrix, mm);
     next.trigger();
     cgl.popViewMatrix();
     cgl.popModelMatrix();
 };
+
 
 };
 
@@ -25267,26 +25361,27 @@ Ops.Array.ArraySum = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var inArray=op.inArray("In");
-var inValue=op.inValue("Value",1.0);
-var outArray=op.outArray("Result");
+const
+    inArray = op.inArray("In"),
+    inValue = op.inValue("Value", 1.0),
+    outArray = op.outArray("Result");
 
-var newArr=[];
+let newArr = [];
 outArray.set(newArr);
 
-inValue.onChange=
-inArray.onChange=function()
+inValue.onChange =
+inArray.onChange = function ()
 {
-    var arr=inArray.get();
-    if(!arr)return;
+    let arr = inArray.get();
+    if (!arr) return;
 
-    var add=inValue.get();
+    let add = inValue.get();
 
-    if(newArr.length!=arr.length)newArr.length=arr.length;
+    if (newArr.length != arr.length)newArr.length = arr.length;
 
-    for(var i=0;i<arr.length;i++)
+    for (let i = 0; i < arr.length; i++)
     {
-        newArr[i]=arr[i]+add;
+        newArr[i] = arr[i] + add;
     }
 
     outArray.set(null);
@@ -25682,8 +25777,8 @@ const attachments={};
 const
     data = op.inObject("Data"),
     key = op.inString("Key"),
-    result = op.outValue("Result"),
-    outFound = op.outBool("Found");
+    result = op.outNumber("Result"),
+    outFound = op.outBoolNum("Found");
 
 result.ignoreValueSerialize = true;
 data.ignoreValueSerialize = true;
@@ -25692,7 +25787,7 @@ data.onChange = exec;
 
 key.onChange = function ()
 {
-    op.setUiAttrib({ "extendTitle": key.get() });
+    if (!key.isLinked())op.setUiAttrib({ "extendTitle": key.get() });
     exec();
 };
 
@@ -25779,11 +25874,10 @@ const
     doRequest = op.inTriggerButton("Request Fullscreen"),
     doExit = op.inTriggerButton("Exit Fullscreen"),
     inEle = op.inSwitch("Element", ["Canvas", "Document"], "Canvas"),
-    isFullscreen = op.outValueBool("Is Fullscreen");
+    isFullscreen = op.outBoolNum("Is Fullscreen");
 
 doExit.onTriggered = exitFs;
 doRequest.onTriggered = startFs;
-
 
 let countStarts = 0;
 
@@ -25816,7 +25910,6 @@ function startFs()
     setTimeout(setState, 500);
     setTimeout(setState, 1000);
 }
-
 
 function exitFs()
 {
@@ -25851,16 +25944,12 @@ Ops.Trigger.RouteTrigger = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-// constants
 const NUM_PORTS = 24;
 
-// inputs
 const exePort = op.inTriggerButton("Execute");
 const switchPort = op.inValueInt("Switch Value");
-
-// outputs
 const nextTriggerPort = op.outTrigger("Next Trigger");
-const valueOutPort = op.outValue("Switched Value");
+const valueOutPort = op.outNumber("Switched Value");
 const triggerPorts = [];
 for (let j = 0; j < NUM_PORTS; j++)
 {
@@ -25920,7 +26009,7 @@ const filename = op.inUrl("file"),
     reloadTrigger = op.inTriggerButton("reload"),
     outData = op.outObject("data"),
     outString = op.outString("response"),
-    isLoading = op.outValue("Is Loading", false),
+    isLoading = op.outBoolNum("Is Loading", false),
     outTrigger = op.outTrigger("Loaded");
 
 filename.setUiAttribs({ "title": "URL" });
@@ -25979,6 +26068,8 @@ function reload(addCachebuster, force = false)
             url,
             (err, _data, xhr) =>
             {
+                outData.set(null);
+                outString.set(null);
                 if (err)
                 {
                     op.patch.loading.finished(loadingId);
@@ -25990,13 +26081,11 @@ function reload(addCachebuster, force = false)
                 try
                 {
                     let data = _data;
-                    outData.set(null);
                     if (typeof data === "string" && inParseJson.get())
                     {
                         data = JSON.parse(_data);
                         outData.set(data);
                     }
-                    outString.set(null);
                     outString.set(_data);
                     op.uiAttr({ "error": null });
                     op.patch.loading.finished(loadingId);
@@ -26042,7 +26131,7 @@ const op=this;
 const attachments={};
 const
     inObj = op.inObject("Object"),
-    outNumValues = op.outValue("Num values"),
+    outNumValues = op.outNumber("Num values"),
     outValues = op.outArray("Values");
 
 inObj.onChange = () =>
@@ -26089,6 +26178,7 @@ const
     landscape = op.outBool("Landscape");
 
 let cgl = op.patch.cgl;
+
 cgl.on("resize", update);
 
 inUnit.onChange = update;
@@ -26350,7 +26440,6 @@ function update()
 {
     let str = "";
 
-    // if(inWhat.get()=="All") str=String(inStr.get()).replaceAll(inSearch.get(),inRepl.get());
     if (inWhat.get() == "All") str = String(inStr.get()).replace(new RegExp(inSearch.get(), "g"), inRepl.get());
     else str = String(inStr.get()).replace(inSearch.get(), inRepl.get());
 
@@ -26423,26 +26512,27 @@ Ops.Array.SwitchArray = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var idx=op.inValueInt("Index");
-var valuePorts=[];
-var result=op.outArray("Result");
+let idx = op.inValueInt("Index");
+let valuePorts = [];
+let result = op.outArray("Result");
 
-idx.onChange=update;
+idx.onChange = update;
 
-for(var i=0;i<10;i++)
+for (let i = 0; i < 10; i++)
 {
-    var p=op.inArray("Array "+i);
-    valuePorts.push( p );
-    p.onChange=update;
+    let p = op.inArray("Array " + i);
+    valuePorts.push(p);
+    p.onChange = update;
 }
 
 function update()
 {
-    if(idx.get()>=0 && valuePorts[idx.get()])
+    if (idx.get() >= 0 && valuePorts[idx.get()])
     {
-        result.set( valuePorts[idx.get()].get() );
+        result.set(valuePorts[idx.get()].get());
     }
 }
+
 
 };
 
@@ -26463,21 +26553,20 @@ Ops.Math.Modulo = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const result = op.outValue("result");
-const number1 = op.inValueFloat("number1");
-const number2 = op.inValueFloat("number2");
-const pingpong = op.inValueBool("pingpong");
+const
+    number1 = op.inValueFloat("number1", 1),
+    number2 = op.inValueFloat("number2", 2),
+    pingpong = op.inValueBool("pingpong"),
+    result = op.outNumber("result");
 
-// pointer to function
 let calculateFunction = calculateModule;
 
-number1.onChange = exec;
+number1.onChange =
 number2.onChange = exec;
 
-number1.set(1);
-number2.set(2);
-
 pingpong.onChange = updatePingPong;
+
+exec();
 
 function exec()
 {
@@ -26500,10 +26589,6 @@ function calculatePingPong(i, n)
     i %= cycle;
     if (i >= n) return cycle - i;
     else return i;
-
-    // let r = ((n1 % n2) + n2) % n2 * 2;
-    // if (r > n2) return n2 * 2.0 - r;
-    // else return r;
 }
 
 function updatePingPong()
@@ -26607,33 +26692,34 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    inArr=op.inArray("Array"),
-    outMin=op.outValue("Min"),
-    outMax=op.outValue("Max"),
-    outAvg=op.outValue("Average");
+    inArr = op.inArray("Array"),
+    outMin = op.outNumber("Min"),
+    outMax = op.outNumber("Max"),
+    outAvg = op.outNumber("Average");
 
-inArr.onChange=function()
+inArr.onChange = function ()
 {
-    var arr=inArr.get();
+    let arr = inArr.get();
 
-    var min=999999999;
-    var max=-999999999;
-    var avg=0;
+    let min = 999999999;
+    let max = -999999999;
+    let avg = 0;
 
-    if(arr)
+    if (arr)
     {
-        for(var i=0;i<arr.length;i++)
+        for (let i = 0; i < arr.length; i++)
         {
-            avg+=arr[i];
-            min=Math.min(min,arr[i]);
-            max=Math.max(max,arr[i]);
+            avg += arr[i];
+            min = Math.min(min, arr[i]);
+            max = Math.max(max, arr[i]);
         }
-        avg/=arr.length;
+        avg /= arr.length;
     }
     outMin.set(min);
     outMax.set(max);
     outAvg.set(avg);
 };
+
 
 };
 
@@ -26657,34 +26743,33 @@ const attachments={};
 const
     cgl = op.patch.cgl,
     pUpdate = op.inTriggerButton("update"),
-    inNum=op.inValueInt("Num Points",2000),
-    inSeed=op.inValueFloat("Seed",1),
-    zPos = op.inSwitch("Z Position",['None','Red','Green','Blue','Alpha'],'Red'),
-    zMultiply = op.inValueFloat("Z Multiply",1.0),
+    inNum = op.inValueInt("Num Points", 2000),
+    inSeed = op.inValueFloat("Seed", 1),
+    zPos = op.inSwitch("Z Position", ["None", "Red", "Green", "Blue", "Alpha"], "Red"),
+    zMultiply = op.inValueFloat("Z Multiply", 1.0),
     tex = op.inObject("texture"),
     outTrigger = op.outTrigger("trigger"),
     outPoints = op.outArray("Points"),
     outPointsNum = op.outValue("NumPoints");
 
-var fb = null,
+let fb = null,
     pixelData = null,
     texChanged = false;
 
-op.toWorkPortsNeedToBeLinked(tex,outPoints);
+op.toWorkPortsNeedToBeLinked(tex, outPoints);
 
-tex.onChange = function (){ texChanged=true; };
+tex.onChange = function () { texChanged = true; };
 
-var channelType=op.patch.cgl.gl.UNSIGNED_BYTE;
-var points=[];
+let channelType = op.patch.cgl.gl.UNSIGNED_BYTE;
+let points = [];
 
-pUpdate.onTriggered =updatePixels;
+pUpdate.onTriggered = updatePixels;
 
-const NUM_COL_CHANNELS=4;
+const NUM_COL_CHANNELS = 4;
 
-
-function updatePixels ()
+function updatePixels()
 {
-    var realTexture = tex.get(), gl = cgl.gl;
+    let realTexture = tex.get(), gl = cgl.gl;
 
     if (!realTexture) return;
     if (!fb) fb = gl.createFramebuffer();
@@ -26694,11 +26779,11 @@ function updatePixels ()
     if (texChanged)
     {
         gl.framebufferTexture2D(
-           gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-           gl.TEXTURE_2D, realTexture.tex, 0
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+            gl.TEXTURE_2D, realTexture.tex, 0
         );
 
-        pixelData = new Uint8Array(realTexture.width*realTexture.height*NUM_COL_CHANNELS);
+        pixelData = new Uint8Array(realTexture.width * realTexture.height * NUM_COL_CHANNELS);
         texChanged = false;
     }
 
@@ -26715,82 +26800,47 @@ function updatePixels ()
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    var num=inNum.get();
-    var numPixels=pixelData.length;
+    let num = inNum.get();
+    let numPixels = pixelData.length;
 
-    if(num*3!=points.length)points.length=num*3;
+    if (num * 3 != points.length)points.length = num * 3;
 
-    Math.randomSeed=inSeed.get();
+    Math.randomSeed = inSeed.get();
 
-    var pixelStepX=1/realTexture.width;
-    var pixelStepY=1/realTexture.height;
+    let pixelStepX = 1 / realTexture.width;
+    let pixelStepY = 1 / realTexture.height;
 
-    var offsetX=pixelStepX*realTexture.width/2;
-    var offsetY=pixelStepY*realTexture.height/2;
+    let offsetX = pixelStepX * realTexture.width / 2;
+    let offsetY = pixelStepY * realTexture.height / 2;
 
-    var ind=0;
-    var count=0;
+    let ind = 0;
+    let count = 0;
 
-    var colChanOffset=0;
-    if(zPos.get()=="Green")colChanOffset=1;
-        else if(zPos.get()=="Blue")colChanOffset=2;
-        else if(zPos.get()=="Alpha")colChanOffset=3;
-        else if(zPos.get()=="None")colChanOffset=4;
+    let colChanOffset = 0;
+    if (zPos.get() == "Green")colChanOffset = 1;
+    else if (zPos.get() == "Blue")colChanOffset = 2;
+    else if (zPos.get() == "Alpha")colChanOffset = 3;
+    else if (zPos.get() == "None")colChanOffset = 4;
 
-    while(ind<num*3)
+    while (ind < num * 3)
     {
         count++;
-        if(count>num*3*100)return;
-        var x=Math.floor(Math.seededRandom()*realTexture.width);
-        var y=Math.floor(Math.seededRandom()*realTexture.height);
-        var intens=pixelData[(x+(y*realTexture.width))*NUM_COL_CHANNELS+colChanOffset];
+        if (count > num * 3 * 100) return;
+        let x = Math.floor(Math.seededRandom() * realTexture.width);
+        let y = Math.floor(Math.seededRandom() * realTexture.height);
+        let intens = pixelData[(x + (y * realTexture.width)) * NUM_COL_CHANNELS + colChanOffset];
 
-        if(intens>10)
+        if (intens > 10)
         {
-            points[ind++]=((x*pixelStepX)-(offsetX));
-            points[ind++]=((y*pixelStepY)-(offsetY));
+            points[ind++] = ((x * pixelStepX) - (offsetX));
+            points[ind++] = ((y * pixelStepY) - (offsetY));
 
-            if(colChanOffset<4) points[ind++]=(intens/255)*zMultiply.get();
-            else points[ind++]=0;
+            if (colChanOffset < 4) points[ind++] = (intens / 255) * zMultiply.get();
+            else points[ind++] = 0;
         }
     }
 
-    // var off=14;
-    // var offy=15;
-    // var x=0;
-    // var y=0;
-    // while(ind<num*3)
-    // {
-
-    //     count++;
-    //     if(count>num*3*100)return;
-    //     x+=off;
-    //     y+=offy;
-    //     if(x>realTexture.width || y>realTexture.height)
-    //     {
-
-    //         off=off-(Math.random()*4-2);
-    //         offy=offy-(Math.random()*4-2);
-    //         x=off;
-    //         y=offy;
-    //     }
-
-    //     x=Math.abs(Math.floor(x));
-    //     y=Math.abs(Math.floor(y));
-
-    //     var intens=pixelData[(x+(y*realTexture.width))*NUM_COL_CHANNELS+colChanOffset];
-
-    //     if(intens>10)
-    //     {
-    //         points[ind++]=((x*pixelStepX)-(offsetX));
-    //         points[ind++]=((y*pixelStepY)-(offsetY));
-
-    //         if(colChanOffset<4) points[ind++]=(intens/255);
-    //         else points[ind++]=0;
-    //     }
-    // }
-
-    outPointsNum.set(ind/3);
+    outPointsNum.set(ind / 3);
     outPoints.set(null);
     outPoints.set(points);
 
@@ -27213,7 +27263,7 @@ const
     exe = op.inTriggerButton("exe"),
     reset = op.inTriggerButton("reset"),
     trigger = op.outTrigger("trigger"),
-    num = op.outValue("timesTriggered");
+    num = op.outNumber("timesTriggered");
 
 op.toWorkPortsNeedToBeLinked(exe);
 
@@ -27606,10 +27656,7 @@ op.toWorkNeedsParent("Ops.Sidebar.Sidebar");
 function setDefaultValue()
 {
     inDefault.set(outValue.get());
-    if (CABLES.UI && op.isCurrentUiOp())
-    {
-        gui.opParams.show(op); /* update DOM */
-    }
+    op.refreshParams();
 }
 
 // events
@@ -27806,26 +27853,25 @@ Ops.Boolean.TriggerChangedFalse = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
+let val = op.inValueBool("Value", false);
+let next = op.outTrigger("Next");
 
-var val=op.inValueBool("Value",false);
+let oldVal = 0;
 
-var next=op.outTrigger("Next");
-
-var oldVal=0;
-
-val.onChange=function()
+val.onChange = function ()
 {
-    var newVal=val.get();
-    if(oldVal && !newVal)
+    let newVal = val.get();
+    if (oldVal && !newVal)
     {
-        oldVal=false;
+        oldVal = false;
         next.trigger();
     }
     else
     {
-        oldVal=true;
+        oldVal = true;
     }
 };
+
 
 };
 
@@ -27846,45 +27892,42 @@ Ops.Value.SwitchNumberOnTrigger = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var triggers=[];
+const
+    currentVal = op.outNumber("Value"),
+    oldVal = op.outNumber("Last Value"),
+    triggered = op.outTrigger("Triggered");
 
-var currentVal=op.outValue("Value");
-var oldVal=op.outValue("Last Value");
-
-var triggered=op.outTrigger("Triggered");
-
-var inVals=[];
-var inExes=[];
+let triggers = [];
+let inVals = [];
+let inExes = [];
 
 function onTrigger()
 {
     oldVal.set(currentVal.get());
-    currentVal.set( inVals[this.slot].get() );
+    currentVal.set(inVals[this.slot].get());
     triggered.trigger();
 }
 
-var num=8;
-for(var i=0;i<num;i++)
+let num = 8;
+for (let i = 0; i < num; i++)
 {
-    var newExe=op.addInPort(new CABLES.Port(op,"Trigger "+i,CABLES.OP_PORT_TYPE_FUNCTION));
-    newExe.slot=i;
-    newExe.onTriggered=onTrigger.bind(newExe);
-    var newVal=op.addInPort(new CABLES.Port(op,"Value "+i,CABLES.OP_PORT_TYPE_VALUE));
-    inVals.push( newVal );
+    let newExe = op.addInPort(new CABLES.Port(op, "Trigger " + i, CABLES.OP_PORT_TYPE_FUNCTION));
+    newExe.slot = i;
+    newExe.onTriggered = onTrigger.bind(newExe);
+    let newVal = op.addInPort(new CABLES.Port(op, "Value " + i, CABLES.OP_PORT_TYPE_VALUE));
+    inVals.push(newVal);
 }
 
-var defaultVal = op.inValueString("Default Value");
+let defaultVal = op.inValueString("Default Value");
 
 currentVal.set(defaultVal.get());
 oldVal.set(defaultVal.get());
 
-defaultVal.onChange = function(){
+defaultVal.onChange = function ()
+{
     oldVal.set(currentVal.get());
-    currentVal.set(defaultVal.get());  
+    currentVal.set(defaultVal.get());
 };
-
-
-
 
 
 };
@@ -28714,19 +28757,20 @@ Ops.Trigger.TriggerIfDecreased = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var value=op.inValue("Value");
-var trigger=op.outTrigger("Trigger");
+const
+    value = op.inValue("Value"),
+    trigger = op.outTrigger("Trigger");
 
-var lastValue=-Number.MAX_VALUE;
+let lastValue = -Number.MAX_VALUE;
 
-value.onChange=function()
+value.onChange = function ()
 {
-    var v=value.get();
-    if(v<lastValue)
+    const v = value.get();
+    if (v < lastValue)
     {
         trigger.trigger();
     }
-    lastValue=v;
+    lastValue = v;
 };
 
 
@@ -28833,7 +28877,7 @@ const attachments={};
 const exe = op.inTriggerButton("trigger in"),
     reset = op.inTriggerButton("reset"),
     trigger = op.outTrigger("trigger out"),
-    num = op.outValue("current count"),
+    num = op.outNumber("current count"),
 
     inMinLoopValue = op.inValueInt("Loop min", 0.0),
     inMaxLoopValue = op.inValueInt("Loop max", 4.0);
@@ -29018,13 +29062,14 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    val=op.inValue("Value"),
-    result=op.outValue("Result",true);
+    val = op.inValue("Value"),
+    result = op.outBoolNum("Result", true);
 
-val.onChange=function()
+val.onChange = function ()
 {
-    result.set(val.get()==0);
+    result.set(val.get() == 0);
 };
+
 
 };
 
@@ -29185,18 +29230,19 @@ Ops.Gl.Meshes.Circle = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const render = op.inTrigger("render");
-const radius = op.inValue("radius", 0.5);
-const innerRadius = op.inValueSlider("innerRadius", 0);
-const segments = op.inValueInt("segments", 40);
-const percent = op.inValueSlider("percent", 1);
-const steps = op.inValue("steps", 0);
-const invertSteps = op.inValueBool("invertSteps", false);
-const mapping = op.inSwitch("mapping", ["flat", "round"]);
-const drawSpline = op.inValueBool("Spline", false);
-const inDraw = op.inValueBool("Draw", true);
-const trigger = op.outTrigger("trigger");
-const geomOut = op.outObject("geometry", null, "geometry");
+const
+    render = op.inTrigger("render"),
+    radius = op.inValue("radius", 0.5),
+    innerRadius = op.inValueSlider("innerRadius", 0),
+    segments = op.inValueInt("segments", 40),
+    percent = op.inValueSlider("percent", 1),
+    steps = op.inValue("steps", 0),
+    invertSteps = op.inValueBool("invertSteps", false),
+    mapping = op.inSwitch("mapping", ["flat", "round"]),
+    drawSpline = op.inValueBool("Spline", false),
+    inDraw = op.inValueBool("Draw", true),
+    trigger = op.outTrigger("trigger"),
+    geomOut = op.outObject("geometry", null, "geometry");
 
 op.setPortGroup("Size", [radius, innerRadius]);
 op.setPortGroup("Display", [percent, steps, invertSteps]);
@@ -29478,25 +29524,23 @@ Ops.Math.VectorLength = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-var x=op.inValue("X");
-var y=op.inValue("Y");
-var z=op.inValue("Z");
+const
+    x = op.inValue("X"),
+    y = op.inValue("Y"),
+    z = op.inValue("Z"),
+    l = op.outNumber("Length");
 
-var l=op.outValue("Length");
+x.onChange =
+    y.onChange =
+    z.onChange = update;
 
-x.onChange=update;
-y.onChange=update;
-z.onChange=update;
-
-var vec=vec3.create();
+let vec = vec3.create();
 
 function update()
 {
-    vec3.set(vec,x.get(),y.get(),z.get());
+    vec3.set(vec, x.get(), y.get(), z.get());
     l.set(vec3.len(vec));
 }
-
-
 
 
 };
@@ -29541,12 +29585,14 @@ function onKeyDown(e)
         learnedKeyCode.set(e.keyCode);
         if (CABLES.UI)
         {
-            gui.opParams.show(op);
+            op.refreshParams();
         }
         // op.log("Learned key code: " + learnedKeyCode.get());
         learning = false;
         removeListeners();
         addListener();
+
+        if (CABLES.UI)gui.emitEvent("portValueEdited", op, learnedKeyCode, learnedKeyCode.get());
     }
     else
     {
@@ -29957,7 +30003,7 @@ const attachments={};
 const
     filename = op.inUrl("file", [".otf", ".ttf", ".woff", ".woff2"]),
     fontname = op.inString("family"),
-    outLoaded = op.outValue("Loaded"),
+    outLoaded = op.outBoolNum("Loaded"),
     loadedTrigger = op.outTrigger("Loaded Trigger");
 
 let loadingId = null;
@@ -30060,10 +30106,9 @@ const
     valueFalse = op.inValue("value false", 0),
     valueTrue = op.inValue("value true", 1),
     next = op.outTrigger("trigger"),
-    value = op.outValue("value"),
-    finished = op.outValueBool("finished"),
+    value = op.outNumber("value"),
+    finished = op.outBoolNum("finished"),
     finishedTrigger = op.outTrigger("Finished Trigger");
-
 
 const startTime = CABLES.now();
 op.toWorkPortsNeedToBeLinked(exe);
@@ -30082,7 +30127,6 @@ function setAnim()
 
     anim.setValue(now, oldValue);
 
-
     if (!bool.get())
     {
         if (dir.get() != "Only True") anim.setValue(now + duration.get(), valueFalse.get());
@@ -30094,7 +30138,6 @@ function setAnim()
         else anim.setValue(now, valueTrue.get());
     }
 }
-
 
 exe.onTriggered = function ()
 {
@@ -30130,105 +30173,101 @@ Ops.Html.CSSFilter = function()
 CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
-const inEle=op.inObject("Element");
-const inMethod=op.inValueSelect("method",["-","blur","brightness","contrast","grayscale","hue-rotate","invert","opacity","saturate","sepia"]);
-const inVal=op.inValue("Value");
+const inEle = op.inObject("Element");
+const inMethod = op.inValueSelect("method", ["-", "blur", "brightness", "contrast", "grayscale", "hue-rotate", "invert", "opacity", "saturate", "sepia"]);
+const inVal = op.inValue("Value");
 
-var suffix="";
-var prefix="";
+let suffix = "";
+let prefix = "";
 
-inVal.onChange=setValue;
-inEle.onChange=setValue;
+inVal.onChange = setValue;
+inEle.onChange = setValue;
 
-var oldEle=null;
+let oldEle = null;
 
 function getCSSFilterString()
 {
-    return inMethod.get()+'('+inVal.get()+suffix+')';
+    return inMethod.get() + "(" + inVal.get() + suffix + ")";
 }
 
-inEle.onLinkChanged=function()
+inEle.onLinkChanged = function ()
 {
     // remove style when deleting op
-    if(inEle.isLinked())return;
+    if (inEle.isLinked()) return;
 
-    const ele=oldEle;//inEle.get();
+    const ele = oldEle;// inEle.get();
 
-    if(ele && ele.style)
+    if (ele && ele.style)
     {
-        var filter=ele.style.filter;
-        var str='';
+        let filter = ele.style.filter;
+        var str = "";
 
-        if(filter && filter.length>0)
+        if (filter && filter.length > 0)
         {
-            var str='';
-            var parts=filter.split(' ');
-            for(var i=0;i<parts.length;i++)
+            var str = "";
+            let parts = filter.split(" ");
+            for (let i = 0; i < parts.length; i++)
             {
-                if(parts[i].indexOf(inMethod.get())==0)
-                    parts[i]='';
+                if (parts[i].indexOf(inMethod.get()) == 0)
+                    parts[i] = "";
             }
 
-            str=parts.join(' ');
+            str = parts.join(" ");
         }
-        ele.style.filter=str;
+        ele.style.filter = str;
     }
-
-
 };
 
 function setValue()
 {
-    const ele=inEle.get();
-    var str='';
+    const ele = inEle.get();
+    let str = "";
 
-    if(ele && ele.style)
+    if (ele && ele.style)
     {
-        if(ele!=oldEle) oldEle=ele;
-        var foundMyFilter=false;
-        var filter=ele.style.filter;
+        if (ele != oldEle) oldEle = ele;
+        let foundMyFilter = false;
+        let filter = ele.style.filter;
 
-        if(filter && filter.length>0)
+        if (filter && filter.length > 0)
         {
-            var parts=filter.split(' ');
-            for(var i=0;i<parts.length;i++)
+            let parts = filter.split(" ");
+            for (let i = 0; i < parts.length; i++)
             {
-                if(parts[i].indexOf(inMethod.get())==0)
+                if (parts[i].indexOf(inMethod.get()) == 0)
                 {
-                    foundMyFilter=true;
-                    parts[i]=getCSSFilterString();
+                    foundMyFilter = true;
+                    parts[i] = getCSSFilterString();
                 }
             }
 
-            str=parts.join(' ');
+            str = parts.join(" ");
         }
 
-        if(!foundMyFilter)
-            str+=' '+getCSSFilterString();
+        if (!foundMyFilter)
+            str += " " + getCSSFilterString();
 
-        ele.style.filter=str;
+        ele.style.filter = str;
     }
 }
 
-
-inMethod.onChange=function()
+inMethod.onChange = function ()
 {
-    var m=inMethod.get();
+    let m = inMethod.get();
 
-    prefix=inMethod.get()+":";
+    prefix = inMethod.get() + ":";
 
-    if(m=='blur') suffix='px';
-    if(m=='brightness') suffix='';
-    if(m=='contrast') suffix='%';
-    if(m=='grayscale') suffix='%';
-    if(m=='hue-rotate') suffix='deg';
-    if(m=='invert') suffix='%';
-    if(m=='opacity') suffix='%';
-    if(m=='saturate') suffix='';
-    if(m=='sepia') suffix='%';
+    if (m == "blur") suffix = "px";
+    if (m == "brightness") suffix = "";
+    if (m == "contrast") suffix = "%";
+    if (m == "grayscale") suffix = "%";
+    if (m == "hue-rotate") suffix = "deg";
+    if (m == "invert") suffix = "%";
+    if (m == "opacity") suffix = "%";
+    if (m == "saturate") suffix = "";
+    if (m == "sepia") suffix = "%";
     setValue();
 };
-
 
 
 };
@@ -30251,41 +30290,44 @@ CABLES.Op.apply(this,arguments);
 const op=this;
 const attachments={};
 const
-    exe=op.inTrigger("exe"),
+    exe = op.inTrigger("exe"),
+    mode = op.inSwitch("Mode", ["Sine", "Cosine"], "Sine"),
+    phase = op.inValueFloat("phase", 0),
+    mul = op.inValueFloat("frequency", 1),
+    amplitude = op.inValueFloat("amplitude", 1),
     trigOut = op.outTrigger("Trigger out"),
-    result=op.outValue("result"),
-    mode =op.inSwitch("Mode",['Sine','Cosine'],'Sine'),
-    phase=op.inValueFloat("phase",0),
-    mul=op.inValueFloat("frequency",1),
-    amplitude=op.inValueFloat("amplitude",1);
+    result = op.outNumber("result");
 
-var selectIndex = 0;
+let selectIndex = 0;
 const SINE = 0;
 const COSINE = 1;
 
 op.toWorkPortsNeedToBeLinked(exe);
+
+exe.onTriggered = exec;
+mode.onChange = onModeChange;
 
 exec();
 onModeChange();
 
 function onModeChange()
 {
-    var modeSelectValue = mode.get();
+    let modeSelectValue = mode.get();
 
-    if(modeSelectValue === 'Sine') selectIndex = SINE;
-        else if(modeSelectValue === 'Cosine') selectIndex = COSINE;
+    if (modeSelectValue === "Sine") selectIndex = SINE;
+    else if (modeSelectValue === "Cosine") selectIndex = COSINE;
 
-    op.setUiAttrib({"extendTitle":modeSelectValue});
+    op.setUiAttrib({ "extendTitle": modeSelectValue });
     exec();
 }
+
 function exec()
 {
-    if(selectIndex == SINE) result.set( amplitude.get() * Math.sin( (op.patch.freeTimer.get()*mul.get()) + phase.get() ));
-        else result.set( amplitude.get() * Math.cos( (op.patch.freeTimer.get()*mul.get()) + phase.get() ));
+    if (selectIndex == SINE) result.set(amplitude.get() * Math.sin((op.patch.freeTimer.get() * mul.get()) + phase.get()));
+    else result.set(amplitude.get() * Math.cos((op.patch.freeTimer.get() * mul.get()) + phase.get()));
     trigOut.trigger();
 }
-exe.onTriggered=exec;
-mode.onChange=onModeChange;
+
 
 };
 
@@ -30333,6 +30375,59 @@ exe.onTriggered = function ()
 
 Ops.Gl.SaveScreenShot_v3.prototype = new CABLES.Op();
 CABLES.OPS["76843a4d-947f-41ca-9c8f-0faa6ce7380a"]={f:Ops.Gl.SaveScreenShot_v3,objName:"Ops.Gl.SaveScreenShot_v3"};
+
+
+
+
+// **************************************************************
+// 
+// Ops.Boolean.MonoFlop
+// 
+// **************************************************************
+
+Ops.Boolean.MonoFlop = function()
+{
+CABLES.Op.apply(this,arguments);
+const op=this;
+const attachments={};
+const
+    trigger = op.inTriggerButton("Trigger"),
+    duration = op.inValue("Duration", 1),
+    valueTrue = op.inValue("Value True", 1),
+    valueFalse = op.inValue("Value False", 0),
+    resetButton = op.inTriggerButton("Reset"),
+    outAct = op.outTrigger("Activated"),
+    outEnded = op.outTrigger("Ended"),
+    result = op.outBoolNum("Result", false);
+
+let lastTimeout = -1;
+
+resetButton.onTriggered = function ()
+{
+    result.set(valueFalse.get());
+
+    clearTimeout(lastTimeout);
+};
+
+trigger.onTriggered = function ()
+{
+    if (result.get() == valueFalse.get())outAct.trigger();
+    result.set(valueTrue.get());
+
+    clearTimeout(lastTimeout);
+    lastTimeout = setTimeout(function ()
+    {
+        result.set(valueFalse.get());
+        outEnded.trigger();
+    }, duration.get() * 1000);
+};
+
+
+};
+
+Ops.Boolean.MonoFlop.prototype = new CABLES.Op();
+CABLES.OPS["3a4b0a78-4172-41c7-8248-95cb0856ecc8"]={f:Ops.Boolean.MonoFlop,objName:"Ops.Boolean.MonoFlop"};
+
 
 
 window.addEventListener('load', function(event) {
