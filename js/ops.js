@@ -14227,6 +14227,8 @@ const
     number2 = op.inValueFloat("number2"),
     result = op.outBoolNum("result");
 
+op.setTitle(">");
+
 number1.onChange = number2.onChange = exec;
 
 function exec()
@@ -14378,6 +14380,8 @@ const attachments={};
 const number1 = op.inValue("number1");
 const number2 = op.inValue("number2");
 const result = op.outBoolNum("result");
+
+op.setTitle("<");
 
 number1.onChange = exec;
 number2.onChange = exec;
@@ -18564,30 +18568,24 @@ const
     inCoords = op.inArray("Coordinates", 2),
     vertCols = op.inArray("Vertex Colors", 4);
 
+op.toWorkPortsNeedToBeLinked(arr, exe);
+op.setPortGroup("Texture Coordinates", [pTexCoordRand, seed, inCoords]);
+
 const cgl = op.patch.cgl;
+const geom = new CGL.Geometry("pointcloudfromarray");
+let deactivated = false;
+let mesh = null;
+let texCoords = [];
+let needsRebuild = true;
+let showingError = false;
 
 inCoords.onChange = updateTexCoordsPorts;
 pTexCoordRand.onChange = updateTexCoordsPorts;
 vertCols.onChange = updateVertCols;
 seed.onChange = arr.onChange = reset;
 numPoints.onChange = updateNumVerts;
-
 vertCols.onLinkChanged = reset;
-
-op.toWorkPortsNeedToBeLinked(arr, exe);
-
-op.setPortGroup("Texture Coordinates", [pTexCoordRand, seed, inCoords]);
-
-let deactivated = false;
-
 exe.onTriggered = doRender;
-
-let mesh = null;
-const geom = new CGL.Geometry("pointcloudfromarray");
-let texCoords = [];
-let needsRebuild = true;
-
-let showingError = false;
 
 function doRender()
 {
@@ -18599,7 +18597,7 @@ function doRender()
         else op.setUiError("nopointmat", null);
     }
 
-    if (needsRebuild || !mesh)rebuild();
+    if (needsRebuild || !mesh) rebuild();
     if (!deactivated && mesh) mesh.render(cgl.getShader());
 }
 
@@ -18675,6 +18673,9 @@ function rebuild()
         mesh.setAttribute(CGL.SHADERVAR_VERTEX_POSITION, verts, 3);
         geom.vertices = verts;
         needsRebuild = false;
+
+        console.log(mesh);
+
         return;
     }
 
@@ -18736,13 +18737,17 @@ function rebuild()
 
         geom.setPointVertices(verts);
         geom.setTexCoords(texCoords);
-        geom.verticesIndices = [];
+        // geom.verticesIndices = [];
 
         if (mesh)mesh.dispose();
         mesh = new CGL.Mesh(cgl, geom, cgl.gl.POINTS);
 
         mesh.addVertexNumbers = true;
         mesh.setGeom(geom);
+
+        console.log(mesh);
+
+        outGeom.set(null);
         outGeom.set(geom);
     }
 
@@ -27964,8 +27969,14 @@ dataStr.setUiAttribs({ "hideParam": true });
 op.patchId.setUiAttribs({ "hideParam": true });
 
 let data = { "ports": [], "portsOut": [] };
+let oldPatchId = CABLES.generateUUID();
+op.patchId.set(oldPatchId);
+getSubPatchInputOp();
+getSubPatchOutputOp();
 
-// Ops.Ui.Patch.maxPatchId=CABLES.generateUUID();
+let dataLoaded = false;
+
+op.saveData = saveData;
 
 op.patchId.onChange = function ()
 {
@@ -27983,12 +27994,8 @@ op.patchId.onChange = function ()
     }
 };
 
-var oldPatchId = CABLES.generateUUID();
-op.patchId.set(oldPatchId);
-
 op.onLoaded = function ()
 {
-    // op.patchId.set(CABLES.generateUUID());
 };
 
 op.onLoadedValueSet = function ()
@@ -28005,10 +28012,6 @@ function loadData()
 {
 }
 
-getSubPatchInputOp();
-getSubPatchOutputOp();
-
-let dataLoaded = false;
 dataStr.onChange = function ()
 {
     if (dataLoaded) return;
@@ -28030,26 +28033,29 @@ function saveData()
     dataStr.set(JSON.stringify(data));
 }
 
-op.saveData = saveData;
-
+op.addPortListener = addPortListener;
 function addPortListener(newPort, newPortInPatch)
 {
-    newPort.addEventListener("onUiAttrChange", function (attribs)
+    if (!newPort.hasSubpatchLstener)
     {
-        if (attribs.title)
+        newPort.hasSubpatchLstener = true;
+        newPort.addEventListener("onUiAttrChange", function (attribs)
         {
-            let i = 0;
-            for (i = 0; i < data.portsOut.length; i++)
-                if (data.portsOut[i].name == newPort.name)
-                    data.portsOut[i].title = attribs.title;
+            if (attribs.title)
+            {
+                let i = 0;
+                for (i = 0; i < data.portsOut.length; i++)
+                    if (data.portsOut[i].name == newPort.name)
+                        data.portsOut[i].title = attribs.title;
 
-            for (i = 0; i < data.ports.length; i++)
-                if (data.ports[i].name == newPort.name)
-                    data.ports[i].title = attribs.title;
+                for (i = 0; i < data.ports.length; i++)
+                    if (data.ports[i].name == newPort.name)
+                        data.ports[i].title = attribs.title;
 
-            saveData();
-        }
-    });
+                saveData();
+            }
+        });
+    }
 
     if (newPort.direction == CABLES.PORT_DIR_IN)
     {
@@ -28082,6 +28088,7 @@ function addPortListener(newPort, newPortInPatch)
     }
 }
 
+op.setupPorts = setupPorts;
 function setupPorts()
 {
     if (!op.patchId.get()) return;
@@ -28251,8 +28258,7 @@ function getSubPatchOutputOp()
     {
         op.patch.addOp("Ops.Ui.PatchOutput", { "subPatch": op.patchId.get(), "translate": { "x": 0, "y": 0 } });
         patchOutputOP = op.patch.getSubPatchOp(op.patchId.get(), "Ops.Ui.PatchOutput");
-
-        if (!patchOutputOP) op.warn("no patchinput2!");
+        if (!patchOutputOP) op.warn("no patchoutput!");
     }
     return patchOutputOP;
 }
@@ -28287,11 +28293,12 @@ op.addSubLink = function (p, p2)
     }
     else
     {
+        const numOut = data.portsOut.length;
         gui.scene().link(
             p.parent,
             p.getName(),
             getSubPatchOutputOp(),
-            "out" + (num) + " " + p2.parent.name + " " + p2.name
+            "out" + (numOut - 1) + " " + p2.parent.name + " " + p2.name
         );
     }
 
@@ -28346,6 +28353,24 @@ function makeBlueprint()
             }
         });
 }
+
+op.rebuildListeners = () =>
+{
+    console.log("rebuild listeners...");
+
+    const outop = getSubPatchOutputOp();
+    for (let i = 0; i < outop.portsIn.length; i++)
+    {
+        if (outop.portsIn[i].isLinked())
+        {
+            addPortListener(outop.portsIn[i], this.portsOut[i]);
+        }
+    }
+
+    //     CABLES.patch.getOpById("be7febce-b4fa-416a-892a-c1c555feffe4").addPortListener(
+    //     CABLES.patch.getOpById("fecce1d5-e08a-5263-af71-f521c41f88e5").portsIn[1],
+    //     CABLES.patch.getOpById("be7febce-b4fa-416a-892a-c1c555feffe4").portsOut[1]
+};
 
 
 };
